@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.3', '8.4']
+        php: ['8.3', '8.4', '8.5']
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,6 +70,41 @@ jobs:
             dist/elementor-json-bridge.zip.sha256
           if-no-files-found: error
           retention-days: 14
+
+  runtime-smoke:
+    name: WordPress 7.1 + Elementor 4.2.3 smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Install pinned wp-env
+        run: npm install --global --no-fund --no-audit @wordpress/env@11.14.0
+
+      - name: Start pinned WordPress environment
+        run: |
+          cp .wp-env.smoke.json .wp-env.json
+          wp-env start --update
+
+      - name: Activate exact dependencies
+        run: |
+          wp-env run cli wp plugin activate elementor
+          wp-env run cli wp plugin activate elementor-json-bridge
+
+      - name: Run Elementor document roundtrip smoke test
+        run: wp-env run cli wp --user=admin eval-file wp-content/plugins/elementor-json-bridge/tests/integration/smoke.php
+
+      - name: Destroy smoke environment
+        if: always()
+        run: wp-env destroy
 
   plugin-check:
     name: Plugin Check release-package canary
