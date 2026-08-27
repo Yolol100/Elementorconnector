@@ -39,12 +39,12 @@ final class DeviceAuth {
 		}
 
 		$state = [
-			'device_code'     => (string) $data['device_code'],
-			'user_code'       => (string) $data['user_code'],
-			'verification_uri'=> $verify_url,
-			'expires_at'      => time() + max( 1, (int) $data['expires_in'] ),
-			'interval'        => max( 5, (int) $data['interval'] ),
-			'next_poll_at'    => time(),
+			'device_code'      => (string) $data['device_code'],
+			'user_code'        => (string) $data['user_code'],
+			'verification_uri' => $verify_url,
+			'expires_at'       => time() + max( 1, (int) $data['expires_in'] ),
+			'interval'         => max( 5, (int) $data['interval'] ),
+			'next_poll_at'     => time(),
 		];
 		$this->store_state( $user_id, $state );
 
