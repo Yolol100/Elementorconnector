@@ -1,0 +1,10 @@
+.ejb-wrap { max-width: 1280px; }
+.ejb-card { background: #fff; border: 1px solid #dcdcde; border-radius: 4px; margin: 18px 0; padding: 18px 20px; }
+.ejb-card h2 { margin-top: 0; }
+.ejb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ejb-table-wrap { overflow-x: auto; }
+.ejb-table td { vertical-align: top; }
+.ejb-table code { overflow-wrap: anywhere; }
+.ejb-error { color: #b32d2e; display: inline-block; margin-top: 4px; max-width: 360px; }
+#ejb-device { background: #f6f7f7; border-left: 4px solid #2271b1; margin-top: 12px; padding: 10px 14px; }
+#ejb-device-code { font-size: 18px; letter-spacing: 2px; }

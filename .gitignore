@@ -1,0 +1,12 @@
+/vendor/
+/.phpunit.cache/
+/.phpcs-cache
+/build/
+/dist/
+*.zip
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*
+*.log
