@@ -11,6 +11,7 @@ use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
+use Webactueel\ElementorJsonBridge\Sync\LegacyRepositoryMigration;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 
@@ -41,8 +42,10 @@ final class Plugin {
 		$validator  = new PayloadValidator();
 		$snapshots  = new Snapshots();
 		$sync       = new Manager( $documents, $validator, $github, $snapshots, new Lock() );
+		$migration  = new LegacyRepositoryMigration( $documents, $validator, $github, $sync );
 
 		add_action( 'init', [ $snapshots, 'register' ] );
+		$migration->register();
 		( new AdminPage( $auth, $documents, $sync, $snapshots ) )->register();
 		( new RestController( $auth, $github, $documents, $sync ) )->register();
 		( new Scheduler( $sync ) )->register();

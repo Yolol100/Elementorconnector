@@ -43,6 +43,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 			'_ejb_remote_sha',
 			'_ejb_remote_path',
 			'_ejb_repo_identity',
+			'_ejb_repo_identity_migration_attempted',
 			'_ejb_pending_sha',
 			'_ejb_pending_hash',
 			'_ejb_last_error',
