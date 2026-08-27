@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="Elementor JSON Bridge">
-  <description>WordPress coding and PHP 8.1+ compatibility rules.</description>
+  <description>WordPress API/security rules plus PHP 8.1+ compatibility, with two intentional modern source-layout exceptions.</description>
   <file>elementor-json-bridge.php</file>
   <file>uninstall.php</file>
   <file>includes</file>
@@ -8,7 +8,15 @@
   <arg name="basepath" value="."/>
   <arg name="colors"/>
   <arg value="sp"/>
-  <rule ref="WordPress-Core"/>
+
+  <rule ref="WordPress-Core">
+    <!-- The plugin requires PHP 8.1+, so short arrays are an intentional project convention. -->
+    <exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+    <!-- Classes use the repository's namespace-aware PSR-style autoloader instead of class-*.php filenames. -->
+    <exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
+    <exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+  </rule>
+
   <rule ref="PHPCompatibilityWP">
     <properties>
       <property name="testVersion" value="8.1-"/>
