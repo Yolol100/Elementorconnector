@@ -54,14 +54,23 @@ jobs:
         run: bash scripts/build-zip.sh
 
   plugin-check:
-    name: Plugin Check current-stable canary
+    name: Plugin Check release-package canary
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Build exact release package
+        run: bash scripts/build-zip.sh
+
       - name: WordPress Plugin Check
         uses: WordPress/plugin-check-action@10857da14b6c2246d15402b3e69f777edcf8c12e # v1.1.9
         with:
-          build-dir: ./
-          exclude-directories: tests,scripts,docs,vendor,.github
+          build-dir: ./dist/elementor-json-bridge
