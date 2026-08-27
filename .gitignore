@@ -1,6 +1,7 @@
 /vendor/
 /.phpunit.cache/
 /.phpcs-cache
+/.wp-env.json
 /build/
 /dist/
 *.zip
