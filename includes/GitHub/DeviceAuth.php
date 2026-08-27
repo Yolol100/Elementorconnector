@@ -100,7 +100,7 @@ final class DeviceAuth {
 			'access_denied'        => 'GitHub authorization was cancelled.',
 			'device_flow_disabled' => 'Device Flow is not enabled for this GitHub App.',
 		];
-		throw new RuntimeException( $messages[ $error ] ?? 'GitHub authorization failed.' );
+		throw new RuntimeException( esc_html( $messages[ $error ] ?? 'GitHub authorization failed.' ) );
 	}
 
 	public function disconnect( int $user_id = 0 ): void {
@@ -153,7 +153,7 @@ final class DeviceAuth {
 	private function post_form( string $url, array $body ): array {
 		$response = wp_safe_remote_post( $url, [ 'timeout' => 15, 'headers' => [ 'Accept' => 'application/json' ], 'body' => $body ] );
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'GitHub authorization request failed: ' . $response->get_error_message() );
+			throw new RuntimeException( 'GitHub authorization request failed: ' . esc_html( $response->get_error_message() ) );
 		}
 		$status = wp_remote_retrieve_response_code( $response );
 		$data   = json_decode( wp_remote_retrieve_body( $response ), true );
