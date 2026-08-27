@@ -95,12 +95,16 @@ final class DeviceAuth {
 		}
 
 		$this->clear_state( $user_id );
-		$messages = [
-			'expired_token'        => 'The GitHub verification code expired.',
-			'access_denied'        => 'GitHub authorization was cancelled.',
-			'device_flow_disabled' => 'Device Flow is not enabled for this GitHub App.',
-		];
-		throw new RuntimeException( esc_html( $messages[ $error ] ?? 'GitHub authorization failed.' ) );
+		if ( 'expired_token' === $error ) {
+			throw new RuntimeException( 'The GitHub verification code expired.' );
+		}
+		if ( 'access_denied' === $error ) {
+			throw new RuntimeException( 'GitHub authorization was cancelled.' );
+		}
+		if ( 'device_flow_disabled' === $error ) {
+			throw new RuntimeException( 'Device Flow is not enabled for this GitHub App.' );
+		}
+		throw new RuntimeException( 'GitHub authorization failed.' );
 	}
 
 	public function disconnect( int $user_id = 0 ): void {
@@ -151,9 +155,18 @@ final class DeviceAuth {
 	}
 
 	private function post_form( string $url, array $body ): array {
-		$response = wp_safe_remote_post( $url, [ 'timeout' => 15, 'headers' => [ 'Accept' => 'application/json' ], 'body' => $body ] );
+		$response = wp_safe_remote_post(
+			$url,
+			[
+				'timeout'             => 15,
+				'redirection'         => 0,
+				'limit_response_size' => 1_000_000,
+				'headers'             => [ 'Accept' => 'application/json' ],
+				'body'                => $body,
+			]
+		);
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'GitHub authorization request failed: ' . esc_html( $response->get_error_message() ) );
+			throw new RuntimeException( 'GitHub authorization request failed.' );
 		}
 		$status = wp_remote_retrieve_response_code( $response );
 		$data   = json_decode( wp_remote_retrieve_body( $response ), true );
