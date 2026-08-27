@@ -15,6 +15,15 @@ if ( ! class_exists( '\\Elementor\\Plugin' ) || ! defined( 'ELEMENTOR_VERSION' )
 	throw new RuntimeException( 'Elementor is not active in the smoke environment.' );
 }
 
+if ( '7.1' !== get_bloginfo( 'version' ) ) {
+	throw new RuntimeException( 'The smoke environment is not running the pinned WordPress 7.1 release.' );
+}
+if ( '4.2.3' !== ELEMENTOR_VERSION ) {
+	throw new RuntimeException( 'The smoke environment is not running the pinned Elementor 4.2.3 release.' );
+}
+if ( 0 !== strpos( PHP_VERSION, '8.3.' ) ) {
+	throw new RuntimeException( 'The smoke environment is not running the pinned PHP 8.3 runtime.' );
+}
 if ( ! current_user_can( 'manage_options' ) ) {
 	throw new RuntimeException( 'Run the smoke test as a WordPress administrator.' );
 }
