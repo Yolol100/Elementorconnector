@@ -90,3 +90,15 @@ jobs:
         run: |
           cp tests/wp-runtime.php dist/elementor-json-bridge/.ejb-runtime-smoke.php
           wp-env run cli wp eval 'require WP_PLUGIN_DIR . "/elementor-json-bridge/.ejb-runtime-smoke.php";'
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: elementor-json-bridge-release-evidence
+          path: |
+            dist/elementor-json-bridge.zip
+            dist/elementor-json-bridge.zip.sha256
+            dist/elementor-json-bridge.spdx.json
+            dist/elementor-json-bridge.provenance.json
+          if-no-files-found: error
+          retention-days: 14

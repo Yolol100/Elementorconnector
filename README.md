@@ -20,13 +20,26 @@ A green source/CI run is not a production-site claim. Pro, Theme Builder, Loops,
 ## Quality gates
 
 ```bash
+composer install --no-interaction --prefer-dist
 find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 php tests/run.php
+php tests/repository-identity-migration.php
 bash tests/workflow-policy.sh
 bash tests/reproducible-build.sh
 composer qa
-composer audit
+composer audit --locked
 ```
+
+## Release evidence
+
+`bash scripts/build-zip.sh` creates four deterministic evidence files in `dist/`:
+
+- `elementor-json-bridge.zip` — installable runtime package;
+- `elementor-json-bridge.zip.sha256` — portable SHA-256 manifest using the relative ZIP filename;
+- `elementor-json-bridge.spdx.json` — SPDX 2.3 file-level SBOM for the exact runtime package;
+- `elementor-json-bridge.provenance.json` — in-toto Statement with the SLSA provenance v1 predicate and the exact ZIP digest.
+
+The provenance file is unsigned build metadata. It does not by itself claim a SLSA build level or cryptographic attestation.
 
 Real site JSON belongs in a separate private repository, never in this public source repo.
 
