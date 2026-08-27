@@ -45,20 +45,11 @@ jobs:
 
       - name: Development quality tools
         run: |
-          composer validate --strict --no-check-lock
-          composer update --no-interaction --prefer-dist --no-progress
+          composer validate --strict
+          composer install --no-interaction --prefer-dist --no-progress
           composer phpcs
           composer phpstan
-          composer audit
-
-      - name: Upload resolved dependency lock
-        if: matrix.php == '8.4'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: composer-lock-candidate
-          path: composer.lock
-          if-no-files-found: error
-          retention-days: 1
+          composer audit --locked
 
   runtime:
     name: WordPress / Elementor runtime
