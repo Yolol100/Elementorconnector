@@ -9,13 +9,13 @@ final class Settings {
 	public const AUTH_OPTION = 'ejb_github_auth';
 
 	private const DEFAULTS = [
-		'github_client_id'        => '',
-		'repo_owner'              => '',
-		'repo_name'               => '',
-		'repo_branch'             => 'main',
-		'repo_root'               => 'elementor',
-		'auto_export'             => 1,
-		'delete_data_on_uninstall'=> 0,
+		'github_client_id'         => '',
+		'repo_owner'               => '',
+		'repo_name'                => '',
+		'repo_branch'              => 'main',
+		'repo_root'                => 'elementor',
+		'auto_export'              => 1,
+		'delete_data_on_uninstall' => 0,
 	];
 
 	public static function all(): array {
@@ -23,9 +23,9 @@ final class Settings {
 		return wp_parse_args( is_array( $stored ) ? $stored : [], self::DEFAULTS );
 	}
 
-	public static function get( string $key, mixed $default = null ): mixed {
+	public static function get( string $key, mixed $fallback = null ): mixed {
 		$settings = self::all();
-		return array_key_exists( $key, $settings ) ? $settings[ $key ] : $default;
+		return array_key_exists( $key, $settings ) ? $settings[ $key ] : $fallback;
 	}
 
 	public static function sanitize( mixed $input ): array {
@@ -59,7 +59,7 @@ final class Settings {
 			'repo_owner'               => $owner,
 			'repo_name'                => $repo,
 			'repo_branch'              => $branch,
-			'repo_root'                => $root ?: 'elementor',
+			'repo_root'                => '' !== $root ? $root : 'elementor',
 			'auto_export'              => empty( $input['auto_export'] ) ? 0 : 1,
 			'delete_data_on_uninstall' => empty( $input['delete_data_on_uninstall'] ) ? 0 : 1,
 		];
