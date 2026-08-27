@@ -101,7 +101,7 @@ final class Client {
 	private function get_blob( string $sha ): array {
 		[ $owner, $repo ] = $this->repository_parts();
 		$route = '/repos/' . rawurlencode( $owner ) . '/' . rawurlencode( $repo ) . '/git/blobs/' . rawurlencode( $sha );
-		$blob = $this->request( 'GET', $route );
+		$blob  = $this->request( 'GET', $route );
 		if ( 'base64' !== ( $blob['encoding'] ?? '' ) || ! isset( $blob['content'] ) ) {
 			throw new RuntimeException( 'GitHub returned an unexpected blob response.' );
 		}
@@ -122,10 +122,10 @@ final class Client {
 			'redirection'         => 0,
 			'limit_response_size' => 8_000_000,
 			'headers'             => [
-				'Accept'                 => $accept,
-				'Authorization'          => 'Bearer ' . $this->auth->access_token(),
-				'X-GitHub-Api-Version'   => self::API_VERSION,
-				'User-Agent'             => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
+				'Accept'               => $accept,
+				'Authorization'        => 'Bearer ' . $this->auth->access_token(),
+				'X-GitHub-Api-Version' => self::API_VERSION,
+				'User-Agent'           => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
 			],
 		];
 		if ( null !== $json ) {
@@ -134,12 +134,12 @@ final class Client {
 				throw new RuntimeException( 'Unable to encode the GitHub request.' );
 			}
 			$args['headers']['Content-Type'] = 'application/json';
-			$args['body'] = $encoded;
+			$args['body']                    = $encoded;
 		}
 
 		$response = wp_safe_remote_request( $url, $args );
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'GitHub request failed: ' . esc_html( $response->get_error_message() ) );
+			throw new RuntimeException( 'GitHub request failed.' );
 		}
 
 		$status = wp_remote_retrieve_response_code( $response );
@@ -150,13 +150,31 @@ final class Client {
 			return is_array( $data ) ? [ '_status' => $status ] + $data : [ '_status' => $status ];
 		}
 		if ( $status < 200 || $status >= 300 ) {
-			$message = is_array( $data ) && is_string( $data['message'] ?? null ) ? $data['message'] : 'GitHub API error.';
-			throw new RuntimeException( esc_html( sprintf( 'GitHub returned HTTP %d: %s', $status, $message ) ) );
+			$this->throw_http_error( $status );
 		}
 		if ( ! is_array( $data ) ) {
 			throw new RuntimeException( 'GitHub returned malformed JSON.' );
 		}
 		return $data;
+	}
+
+	private function throw_http_error( int $status ): never {
+		if ( 401 === $status ) {
+			throw new RuntimeException( 'GitHub rejected the authentication token.' );
+		}
+		if ( 403 === $status ) {
+			throw new RuntimeException( 'GitHub denied this request.' );
+		}
+		if ( 409 === $status ) {
+			throw new RuntimeException( 'GitHub reported a repository state conflict.' );
+		}
+		if ( 422 === $status ) {
+			throw new RuntimeException( 'GitHub rejected the repository update.' );
+		}
+		if ( 429 === $status ) {
+			throw new RuntimeException( 'GitHub rate limiting is active.' );
+		}
+		throw new RuntimeException( 'GitHub returned an unexpected HTTP error.' );
 	}
 
 	private function assert_rate_limit_window(): void {
@@ -173,7 +191,7 @@ final class Client {
 	private function capture_rate_limit( array $response, int $status ): void {
 		$retry_after = (int) wp_remote_retrieve_header( $response, 'retry-after' );
 		$remaining   = (string) wp_remote_retrieve_header( $response, 'x-ratelimit-remaining' );
-		$reset_at   = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
+		$reset_at    = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
 
 		if ( 429 !== $status && $retry_after < 1 && ! ( 403 === $status && '0' === $remaining ) ) {
 			return;
