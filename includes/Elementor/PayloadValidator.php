@@ -27,8 +27,8 @@ final class PayloadValidator {
 
 		try {
 			$data = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
-		} catch ( JsonException $exception ) {
-			throw new RuntimeException( 'Invalid Elementor JSON.', 0, $exception );
+		} catch ( JsonException ) {
+			throw new RuntimeException( 'Invalid Elementor JSON.' );
 		}
 
 		if ( ! is_array( $data ) || array_is_list( $data ) ) {
@@ -75,8 +75,8 @@ final class PayloadValidator {
 	public function validate_array( array $data, ?string $expected_type = null ): array {
 		try {
 			$json = json_encode( $data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-		} catch ( JsonException $exception ) {
-			throw new RuntimeException( 'Unable to encode Elementor data for validation.', 0, $exception );
+		} catch ( JsonException ) {
+			throw new RuntimeException( 'Unable to encode Elementor data for validation.' );
 		}
 		return $this->decode( $json, $expected_type );
 	}
