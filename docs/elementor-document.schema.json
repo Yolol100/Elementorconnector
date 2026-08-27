@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Yolol100/Elementorconnector/blob/main/docs/elementor-document.schema.json",
+  "title": "Elementor JSON Bridge document",
+  "description": "Schema for the bridge wrapper. Elementor/Atomic element-level extension fields remain allowed; the plugin performs additional runtime depth, aggregate element-count, byte-size, live-type, and roundtrip checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "type", "version", "page_settings", "content"],
+  "properties": {
+    "title": {"type": "string"},
+    "type": {"type": "string", "minLength": 1},
+    "version": {"const": "0.4"},
+    "page_settings": {
+      "oneOf": [
+        {"type": "object"},
+        {"type": "array"}
+      ]
+    },
+    "content": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/element"},
+      "maxItems": 25000
+    }
+  },
+  "$defs": {
+    "element": {
+      "type": "object",
+      "required": ["id", "elType", "settings", "elements"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "elType": {"type": "string", "minLength": 1},
+        "widgetType": {"type": "string", "minLength": 1},
+        "settings": {
+          "oneOf": [
+            {"type": "object"},
+            {"type": "array"}
+          ]
+        },
+        "elements": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/element"},
+          "maxItems": 25000
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"elType": {"const": "widget"}},
+            "required": ["elType"]
+          },
+          "then": {"required": ["widgetType"]}
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

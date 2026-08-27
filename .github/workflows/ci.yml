@@ -39,9 +39,11 @@ jobs:
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
           php tests/run.php
+          php tests/schema-example.php
           php tests/repository-identity-migration.php
           bash tests/workflow-policy.sh
           bash tests/reproducible-build.sh
+          bash tests/package-roundtrip.sh
 
       - name: Development quality tools
         run: |
@@ -86,15 +88,16 @@ jobs:
           ignore-codes: WordPress.Security.EscapeOutput.ExceptionNotEscaped
           include-experimental: false
 
-      - name: Bridge runtime smoke
+      - name: Controlled bridge runtime
         run: |
           cp tests/wp-runtime.php dist/elementor-json-bridge/.ejb-runtime-smoke.php
           wp-env run cli wp eval 'require WP_PLUGIN_DIR . "/elementor-json-bridge/.ejb-runtime-smoke.php";'
+          rm -f dist/elementor-json-bridge/.ejb-runtime-smoke.php
 
       - name: Upload release evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: elementor-json-bridge-release-evidence
+          name: elementor-json-bridge-release-evidence-${{ github.run_id }}
           path: |
             dist/elementor-json-bridge.zip
             dist/elementor-json-bridge.zip.sha256
@@ -102,3 +105,10 @@ jobs:
             dist/elementor-json-bridge.provenance.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Lifecycle smoke
+        run: |
+          wp-env run cli wp plugin deactivate elementor-json-bridge
+          wp-env run cli wp plugin activate elementor-json-bridge
+          wp-env run cli wp plugin uninstall elementor-json-bridge --deactivate --skip-delete
+          wp-env run cli wp eval '$role = get_role("administrator"); if ($role && $role->has_cap("manage_elementor_json_bridge")) { throw new RuntimeException("Bridge capability survived uninstall."); } if (wp_next_scheduled("ejb_poll_remote")) { throw new RuntimeException("Bridge cron survived uninstall."); } echo "PASS lifecycle-cleanup\n";'
