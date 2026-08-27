@@ -64,7 +64,11 @@ final class SecretBox {
 	}
 
 	public function decrypt( string $package ): array {
-		$data = json_decode( base64_decode( $package, true ) ?: '', true );
+		$decoded = base64_decode( $package, true );
+		if ( false === $decoded ) {
+			$decoded = '';
+		}
+		$data = json_decode( $decoded, true );
 		if ( ! is_array( $data ) || 1 !== (int) ( $data['v'] ?? 0 ) ) {
 			throw new RuntimeException( 'Stored GitHub credentials are invalid.' );
 		}
