@@ -7,6 +7,7 @@
  * Requires PHP: 8.3
  * Update URI: false
  * Requires Plugins: elementor
+ * Elementor tested up to: 4.2.3
  * Author: Webactueel
  * Text Domain: elementor-json-bridge
  * License: GPL-2.0-or-later
