@@ -68,6 +68,7 @@ try {
             [
                 'id' => 'ejbprobe01',
                 'elType' => 'container',
+                'isInner' => false,
                 'settings' => [],
                 'elements' => [],
             ],
@@ -80,6 +81,7 @@ try {
     $candidate['content'][] = [
         'id' => 'ejbprobe02',
         'elType' => 'container',
+        'isInner' => false,
         'settings' => [],
         'elements' => [],
     ];

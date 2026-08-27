@@ -69,6 +69,7 @@ $payload = [
         [
             'id' => 'ejbtest01',
             'elType' => 'container',
+            'isInner' => false,
             'settings' => [],
             'elements' => [],
         ],
@@ -84,12 +85,12 @@ update_option(
     Settings::OPTION,
     Settings::sanitize(
         [
-        'github_client_id' => 'Iv1.runtime-test',
-        'repo_owner' => 'runtime-owner',
-        'repo_name' => 'runtime-private-json',
-        'repo_branch' => 'main',
-        'repo_root' => 'elementor',
-        'auto_export' => 0,
+            'github_client_id' => 'Iv1.runtime-test',
+            'repo_owner' => 'runtime-owner',
+            'repo_name' => 'runtime-private-json',
+            'repo_branch' => 'main',
+            'repo_root' => 'elementor',
+            'auto_export' => 0,
             'delete_data_on_uninstall' => 0,
         ]
     ),
@@ -203,6 +204,7 @@ try {
     $remote_v2['content'][] = [
         'id' => 'ejbtest02',
         'elType' => 'container',
+        'isInner' => false,
         'settings' => [],
         'elements' => [],
     ];
@@ -226,6 +228,7 @@ try {
     $remote_v3['content'][] = [
         'id' => 'ejbtest03',
         'elType' => 'container',
+        'isInner' => false,
         'settings' => [],
         'elements' => [],
     ];

@@ -7,6 +7,7 @@
     {
       "id": "container1",
       "elType": "container",
+      "isInner": false,
       "settings": {},
       "elements": [
         {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Yolol100/Elementorconnector/blob/main/docs/elementor-document.schema.json",
   "title": "Elementor JSON Bridge document",
-  "description": "Schema for the bridge wrapper. Elementor/Atomic element-level extension fields remain allowed; the plugin performs additional runtime depth, aggregate element-count, byte-size, live-type, and roundtrip checks.",
+  "description": "Schema for the bridge wrapper. Elementor/Atomic element-level extension fields remain allowed; the plugin performs additional runtime depth, aggregate element-count, byte-size, live-type, and roundtrip checks. Classic layout elements must include Elementor's explicit isInner boolean so GitHub input roundtrips without Elementor adding structure during save.",
   "type": "object",
   "additionalProperties": false,
   "required": ["title", "type", "version", "page_settings", "content"],
@@ -33,6 +33,7 @@
         },
         "elType": {"type": "string", "minLength": 1},
         "widgetType": {"type": "string", "minLength": 1},
+        "isInner": {"type": "boolean"},
         "settings": {
           "oneOf": [
             {"type": "object"},
@@ -52,6 +53,13 @@
             "required": ["elType"]
           },
           "then": {"required": ["widgetType"]}
+        },
+        {
+          "if": {
+            "properties": {"elType": {"enum": ["container", "section", "column"]}},
+            "required": ["elType"]
+          },
+          "then": {"required": ["isInner"]}
         }
       ],
       "additionalProperties": true

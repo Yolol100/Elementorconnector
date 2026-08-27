@@ -40,6 +40,22 @@ sort($expectedElement);
 if ($elementRequired !== $expectedElement || (($element['additionalProperties'] ?? null) !== true)) {
     throw new RuntimeException('Element schema must preserve extension fields while enforcing core fields.');
 }
+if (($element['properties']['isInner']['type'] ?? '') !== 'boolean') {
+    throw new RuntimeException('Element schema must type isInner as boolean.');
+}
+$layoutGuard = false;
+foreach (($element['allOf'] ?? []) as $rule) {
+    $layoutTypes = $rule['if']['properties']['elType']['enum'] ?? [];
+    $thenRequired = $rule['then']['required'] ?? [];
+    sort($layoutTypes);
+    if ($layoutTypes === ['column', 'container', 'section'] && in_array('isInner', $thenRequired, true)) {
+        $layoutGuard = true;
+        break;
+    }
+}
+if (!$layoutGuard) {
+    throw new RuntimeException('Classic layout schema must require isInner to avoid Elementor save normalization.');
+}
 
 (new PayloadValidator())->validate_array($example, 'wp-page');
 

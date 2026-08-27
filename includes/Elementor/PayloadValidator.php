@@ -4,7 +4,6 @@ namespace Webactueel\ElementorJsonBridge\Elementor;
 
 use JsonException;
 use RuntimeException;
-
 defined( 'ABSPATH' ) || exit;
 
 final class PayloadValidator {
@@ -110,6 +109,9 @@ final class PayloadValidator {
 			}
 			if ( 'widget' === $el_type && ( ! isset( $element['widgetType'] ) || ! is_string( $element['widgetType'] ) || '' === $element['widgetType'] ) ) {
 				throw new RuntimeException( 'An Elementor widget is missing widgetType.' );
+			}
+			if ( in_array( $el_type, [ 'container', 'section', 'column' ], true ) && ( ! array_key_exists( 'isInner', $element ) || ! is_bool( $element['isInner'] ) ) ) {
+				throw new RuntimeException( 'A classic Elementor layout element is missing a boolean isInner field.' );
 			}
 			if ( ! array_key_exists( 'settings', $element ) || ! is_array( $element['settings'] ) ) {
 				throw new RuntimeException( 'An Elementor element has invalid settings.' );
