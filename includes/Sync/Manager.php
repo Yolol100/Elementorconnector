@@ -167,4 +167,197 @@ final class Manager {
 				$current      = $this->live_payload( $post_id );
 				$current_hash = CanonicalJson::hash( $current );
 				if ( '' === $base_hash || ! hash_equals( $base_hash, $current_hash ) ) {
-					$this->conflict( $²È="25É¥¹œ€‘ÍÑ…ÑÕÌì($$‘ÍÑ…ÑÕÌ€ô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}MQQUL°ÑÉÕ”€¤ì($%É•ÑÕÉ¸€œœ€„ôô€‘ÍÑ…ÑÕÌ€ü€‘ÍÑ…ÑÕÌ€èMÑ…Ñ”èé1=1}%IQdì(%ô((%ÁÕ‰±¥Œ™Õ¹Ñ¥½¸¥Í}•¹…‰±• ¥¹Ð€‘Á½ÍÑ}¥€¤è‰½½°ì($%É•ÑÕÉ¸€œÄœ€ôôô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}9	1°ÑÉÕ”€¤ì(%ô((%ÁÕ‰±¥Œ™Õ¹Ñ¥½¸Á…Ñ¡}™½È ¥¹Ð€‘Á½ÍÑ}¥€¤èÍÑÉ¥¹œì($$‘Á½ÍÐ€ô•Ñ}Á½ÍÐ €‘Á½ÍÑ}¥€¤ì($%¥˜€ €„€‘Á½ÍÐ€¤Ñ¡É½Ü¹•ÜIÕ¹Ñ¥µ•á•ÁÑ¥½¸ €Q¡”]½É‘AÉ•ÍÌ‘½Õµ•¹Ð‘½•Ì¹½Ð•á¥ÍÐ¸œ€¤ì($$‘™½±‘•È€ôµ…Ñ € €‘Á½ÍÐ´ùÁ½ÍÑ}ÑåÁ”€¤ì€Á…”œ€ôø€Á…•Ìœ°€Á½ÍÐœ€ôø€Á½ÍÑÌœ°€•±•µ•¹Ñ½É}±¥‰É…Éäœ€ôø€Ñ•µÁ±…Ñ•Ìœ°‘•™…Õ±Ð€ôø€ÕÍÑ½´¼œ€¸Í…¹¥Ñ¥é•}­•ä €‘Á½ÍÐ´ùÁ½ÍÑ}ÑåÁ”€¤ôì($%É•ÑÕÉ¸ÑÉ¥´ €¡ÍÑÉ¥¹œ¤M•ÑÑ¥¹Ìèé•Ð €É•Á½}É½½Ðœ°€•±•µ•¹Ñ½Èœ€¤€¸€œ¼œ€¸€‘™½±‘•È€¸€œ¼œ€¸€‘Á½ÍÑ}¥€¸€œ¹©Í½¸œ°€œ¼œ€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸±½­• ¥¹Ð€‘Á½ÍÑ}¥°…±±…‰±”€‘…±±‰…¬€¤è…ÉÉ…äì($$‘Ñ½­•¸€ô€‘Ñ¡¥Ì´ù±½¬´ù…ÅÕ¥É” €‘Á½ÍÑ}¥€¤ì($%ÑÉäì($$%É•ÑÕÉ¸€‘…±±‰…¬ ¤ì($%ô…Ñ € Q¡É½Ý…‰±”€‘•ÉÉ½È€¤ì($$%¥˜€ €„¥¹}…ÉÉ…ä €‘Ñ¡¥Ì´ùÍÑ…ÑÕÌ €‘Á½ÍÑ}¥€¤°lMÑ…Ñ”èé=91%P°MÑ…Ñ”èéII=Ht°ÑÉÕ”€¤€¤ì($$$$‘Ñ¡¥Ì´ùÍ•Ñ}•ÉÉ½È €‘Á½ÍÑ}¥°MÑ…Ñ”èéII=H°€‘•ÉÉ½È´ù•Ñ5•ÍÍ…” ¤€¤ì($$%ô($$%Ñ¡É½Ü€‘•ÉÉ½Èì($%ô™¥¹…±±äì($$$‘Ñ¡¥Ì´ù±½¬´ùÉ•±•…Í” €‘Á½ÍÑ}¥°€‘Ñ½­•¸€¤ì($%ô(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸É•ÅÕ¥É•}Íå¹}É•…‘ä ¥¹Ð€‘Á½ÍÑ}¥€¤èÙ½¥ì($%¥˜€ €„€‘Ñ¡¥Ì´ù¥Í}•¹…‰±• €‘Á½ÍÑ}¥€¤€¤Ñ¡É½Ü¹•Ü	É¥‘•á•ÁÑ¥½¸ €•©‰}Íå¹}‘¥Í…‰±•œ°€¹…‰±”Íå¹¡É½¹¥é…Ñ¥½¸™½ÈÑ¡¥Ì‘½Õµ•¹Ð™¥ÉÍÐ¸œ°€ÐÀä€¤ì($$‘Ñ¡¥Ì´ù¥Ñ¡Õˆ´ù…ÍÍ•ÉÑ}ÁÉ¥Ù…Ñ•}É•Á½Í¥Ñ½Éä ¤ì($$‘Ñ¡¥Ì´ù…ÍÍ•ÉÑ}É•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä €‘Á½ÍÑ}¥€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸±¥Ù•}Á…å±½… ¥¹Ð€‘Á½ÍÑ}¥€¤è…ÉÉ…äì($%É•ÑÕÉ¸€‘Ñ¡¥Ì´ùÙ…±¥‘…Ñ½È´ùÙ…±¥‘…Ñ•}…ÉÉ…ä €‘Ñ¡¥Ì´ù‘½Õµ•¹ÑÌ´ùÁ…å±½… €‘Á½ÍÑ}¥€¤°€‘Ñ¡¥Ì´ù‘½Õµ•¹ÑÌ´ù‘½Õµ•¹Ñ}ÑåÁ” €‘Á½ÍÑ}¥€¤€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸É•µ½Ñ•}Á…å±½… ¥¹Ð€‘Á½ÍÑ}¥°…ÉÉ…ä€‘É•µ½Ñ”°…ÉÉ…ä€‘±¥Ù”€¤è…ÉÉ…äì($$‘Á…å±½…€ô€‘Ñ¡¥Ì´ùÙ…±¥‘…Ñ½È´ù‘•½‘” €¡ÍÑÉ¥¹œ¤€‘É•µ½Ñ•l½¹Ñ•¹Ðt°€‘Ñ¡¥Ì´ù‘½Õµ•¹ÑÌ´ù‘½Õµ•¹Ñ}ÑåÁ” €‘Á½ÍÑ}¥€¤€¤ì($$‘Á…å±½…‘lÑ¥Ñ±”t€ô€¡ÍÑÉ¥¹œ¤€‘±¥Ù•lÑ¥Ñ±”tì($%É•ÑÕÉ¸€‘Á…å±½…ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸É½±±‰…¬ ¥¹Ð€‘Á½ÍÑ}¥°¥¹Ð€‘Í¹…ÁÍ¡½Ñ}¥°ÍÑÉ¥¹œ€‘•áÁ•Ñ•‘}¡…Í °Q¡É½Ý…‰±”€‘…ÕÍ”€¤è¹•Ù•Èì($%ÑÉäì($$$‘Ñ¡¥Ì´ù‘½Õµ•¹ÑÌ´ùÍ…Ù•}Á…å±½… €‘Á½ÍÑ}¥°€‘Ñ¡¥Ì´ùÍ¹…ÁÍ¡½ÑÌ´ùÁ…å±½… €‘Í¹…ÁÍ¡½Ñ}¥°€‘Á½ÍÑ}¥€¤€¤ì($$%¥˜€ €„¡…Í¡}•ÅÕ…±Ì €‘•áÁ•Ñ•‘}¡…Í °…¹½¹¥…±)Í½¸èé¡…Í  €‘Ñ¡¥Ì´ù±¥Ù•}Á…å±½… €‘Á½ÍÑ}¥€¤€¤€¤€¤ì($$$%Ñ¡É½Ü¹•ÜIÕ¹Ñ¥µ•á•ÁÑ¥½¸ €I½±±‰…¬Ù•É¥™¥…Ñ¥½¸™…¥±•¸œ€¤ì($$%ô($%ô…Ñ € Q¡É½Ý…‰±”€‘É½±±‰…­}•ÉÉ½È€¤ì($$$‘Ñ¡¥Ì´ùÍ•Ñ}•ÉÉ½È €‘Á½ÍÑ}¥°MÑ…Ñ”èéII=H°€ÁÁ±ä™…¥±•…¹É½±±‰…¬½Õ±¹½Ð‰”Ù•É¥™¥•¸œ€¤ì($$%Ñ¡É½Ü¹•ÜIÕ¹Ñ¥µ•á•ÁÑ¥½¸ €ÁÁ±ä™…¥±•…¹É½±±‰…¬½Õ±¹½Ð‰”Ù•É¥™¥•¸œ°€À°€‘É½±±‰…­}•ÉÉ½È€¤ì($%ô($$‘Ñ¡¥Ì´ùÍ•Ñ}•ÉÉ½È €‘Á½ÍÑ}¥°MÑ…Ñ”èéII=H°€ÁÁ±ä™…¥±•ìÑ¡”±½…°Í¹…ÁÍ¡½ÐÝ…ÌÉ•ÍÑ½É•¸œ€¤ì($%Ñ¡É½Ü¹•ÜIÕ¹Ñ¥µ•á•ÁÑ¥½¸ €ÁÁ±ä™…¥±•¸Q¡”ÁÉ•Ù¥½ÕÌ±•µ•¹Ñ½ÈÙ•ÉÍ¥½¸Ý…ÌÉ•ÍÑ½É•¸œ°€À°€‘…ÕÍ”€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸…ÍÍ•ÉÑ}É•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä ¥¹Ð€‘Á½ÍÑ}¥€¤èÙ½¥ì($$‘‰…Í•}¡…Í €ô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}	M}!M °ÑÉÕ”€¤ì($%¥˜€ €œœ€ôôô€‘‰…Í•}¡…Í €¤ì($$%É•ÑÕÉ¸ì($%ô(($$‘­¹½Ý¸€€€ô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}IA=}%°ÑÉÕ”€¤ì($$‘ÕÉÉ•¹Ð€ôM•ÑÑ¥¹ÌèéÉ•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä ¤ì(($%¥˜€ €œœ€ôôô€‘ÕÉÉ•¹Ð€¤ì($$$‘Ñ¡¥Ì´ù½¹™±¥Ð €‘Á½ÍÑ}¥°€Q¡”¥Ñ!ÕˆÉ•Á½Í¥Ñ½Éä°‰É…¹ °½È)M=8É½½Ð¡…¹•™É½´Ñ¡”ÑÉÕÍÑ•Íå¹¡É½¹¥é…Ñ¥½¸‰…Í”¸œ€¤ì($%ô(($%¥˜€ €œœ€ôôô€‘­¹½Ý¸€¤ì($$$‘Ñ¡¥Ì´ùµ¥É…Ñ•}±•…å}É•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä €‘Á½ÍÑ}¥°€‘‰…Í•}¡…Í °€‘ÕÉÉ•¹Ð€¤ì($$%É•ÑÕÉ¸ì($%ô(($%¥˜€ €„¡…Í¡}•ÅÕ…±Ì €‘­¹½Ý¸°€‘ÕÉÉ•¹Ð€¤€¤ì($$$‘Ñ¡¥Ì´ù½¹™±¥Ð €‘Á½ÍÑ}¥°€Q¡”¥Ñ!ÕˆÉ•Á½Í¥Ñ½Éä°‰É…¹ °½È)M=8É½½Ð¡…¹•™É½´Ñ¡”ÑÉÕÍÑ•Íå¹¡É½¹¥é…Ñ¥½¸‰…Í”¸œ€¤ì($%ô(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸µ¥É…Ñ•}±•…å}É•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä ¥¹Ð€‘Á½ÍÑ}¥°ÍÑÉ¥¹œ€‘‰…Í•}¡…Í °ÍÑÉ¥¹œ€‘ÕÉÉ•¹Ñ}¥‘•¹Ñ¥Ñä€¤èÙ½¥ì($$‘­¹½Ý¹}Í¡„€€€€ô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}I5=Q}M!°ÑÉÕ”€¤ì($$‘­¹½Ý¹}Á…Ñ €€€ô€¡ÍÑÉ¥¹œ¤•Ñ}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}I5=Q}AQ °ÑÉÕ”€¤ì($$‘ÕÉÉ•¹Ñ}Á…Ñ €ô€‘Ñ¡¥Ì´ùÁ…Ñ¡}™½È €‘Á½ÍÑ}¥€¤ì(($%¥˜€ €œœ€ôôô€‘­¹½Ý¹}Í¡„ñð€œœ€ôôô€‘­¹½Ý¹}Á…Ñ ñð€‘­¹½Ý¹}Á…Ñ €„ôô€‘ÕÉÉ•¹Ñ}Á…Ñ €¤ì($$$‘Ñ¡¥Ì´ù½¹™±¥Ð €‘Á½ÍÑ}¥°€Q¡”±•…äÍå¹¡É½¹¥é…Ñ¥½¸‰…Í”…¹¹½Ð‰”Í…™•±ä…ÍÍ½¥…Ñ•Ý¥Ñ Ñ¡”½¹™¥ÕÉ•¥Ñ!ÕˆÁ…Ñ ¸œ€¤ì($%ô(($$‘É•µ½Ñ”€ô€‘Ñ¡¥Ì´ù¥Ñ¡Õˆ´ù•Ñ}™¥±” €‘ÕÉÉ•¹Ñ}Á…Ñ €¤ì($%¥˜€ €„€‘É•µ½Ñ”€¤ì($$$‘Ñ¡¥Ì´ù½¹™±¥Ð €‘Á½ÍÑ}¥°€Q¡”±•…äÍå¹¡É½¹¥é…Ñ¥½¸‰…Í”Á½¥¹ÑÌÑ¼„¥Ñ!Õˆ™¥±”Ñ¡…Ð¹¼±½¹•È•á¥ÍÑÌ¸œ€¤ì($%ô(($$‘É•µ½Ñ•}Á…å±½…€ô€‘Ñ¡¥Ì´ùÙ…±¥‘…Ñ½È´ù‘•½‘” €¡ÍÑÉ¥¹œ¤€‘É•µ½Ñ•l½¹Ñ•¹Ðt°€‘Ñ¡¥Ì´ù‘½Õµ•¹ÑÌ´ù‘½Õµ•¹Ñ}ÑåÁ” €‘Á½ÍÑ}¥€¤€¤ì($$‘É•µ½Ñ•}¡…Í €€€€ô…¹½¹¥…±)Í½¸èé¡…Í  €‘É•µ½Ñ•}Á…å±½…€¤ì(($%¥˜€ €„Í•±˜èé±•…å}É•Á½Í¥Ñ½Éå}ÍÑ…Ñ•}µ…Ñ¡•Ì €‘‰…Í•}¡…Í °€‘­¹½Ý¹}Í¡„°€¡ÍÑÉ¥¹œ¤€‘É•µ½Ñ•lÍ¡„t°€‘É•µ½Ñ•}¡…Í €¤€¤ì($$$‘Ñ¡¥Ì´ù½¹™±¥Ð €‘Á½ÍÑ}¥°€Q¡”±•…ä¥Ñ!Õˆ™¥±”¹¼±½¹•Èµ…Ñ¡•ÌÑ¡”ÑÉÕÍÑ•Íå¹¡É½¹¥é…Ñ¥½¸‰…Í”¸œ€¤ì($%ô(($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}IA=}%°€‘ÕÉÉ•¹Ñ}¥‘•¹Ñ¥Ñä€¤ì(%ô((%ÁÉ¥Ù…Ñ”ÍÑ…Ñ¥Œ™Õ¹Ñ¥½¸±•…å}É•Á½Í¥Ñ½Éå}ÍÑ…Ñ•}µ…Ñ¡•Ì ÍÑÉ¥¹œ€‘‰…Í•}¡…Í °ÍÑÉ¥¹œ€‘­¹½Ý¹}Í¡„°ÍÑÉ¥¹œ€‘É•µ½Ñ•}Í¡„°ÍÑÉ¥¹œ€‘É•µ½Ñ•}¡…Í €¤è‰½½°ì($%¥˜€ €œœ€ôôô€‘‰…Í•}¡…Í ñð€œœ€ôôô€‘­¹½Ý¹}Í¡„ñð€œœ€ôôô€‘É•µ½Ñ•}Í¡„ñð€œœ€ôôô€‘É•µ½Ñ•}¡…Í €¤ì($$%É•ÑÕÉ¸™…±Í”ì($%ô(($%É•ÑÕÉ¸¡…Í¡}•ÅÕ…±Ì €‘­¹½Ý¹}Í¡„°€‘É•µ½Ñ•}Í¡„€¤€˜˜¡…Í¡}•ÅÕ…±Ì €‘‰…Í•}¡…Í °€‘É•µ½Ñ•}¡…Í €¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸½¹™±¥Ð ¥¹Ð€‘Á½ÍÑ}¥°ÍÑÉ¥¹œ€‘µ•ÍÍ…”€¤è¹•Ù•Èì($$‘Ñ¡¥Ì´ùÍ•Ñ}•ÉÉ½È €‘Á½ÍÑ}¥°MÑ…Ñ”èé=91%P°€‘µ•ÍÍ…”€¤ì($%Ñ¡É½Ü¹•Ü	É¥‘•á•ÁÑ¥½¸ €•©‰}Íå¹}½¹™±¥Ðœ°€‘µ•ÍÍ…”€¸€œI•Í•Ð½ÈÉ”µ¡•¬Ñ¡”Íå¹¡É½¹¥é…Ñ¥½¸‰…Í”‰•™½É”½¹Ñ¥¹Õ¥¹œ¸œ°€ÐÀä€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸µ…É­}Íå¹• ¥¹Ð€‘Á½ÍÑ}¥°ÍÑÉ¥¹œ€‘Á…Ñ °ÍÑÉ¥¹œ€‘¡…Í °ÍÑÉ¥¹œ€‘Í¡„°ÍÑÉ¥¹œ€‘ÍÑ…ÑÕÌ€¤èÙ½¥ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}I5=Q}AQ °€‘Á…Ñ €¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}IA=}%°M•ÑÑ¥¹ÌèéÉ•Á½Í¥Ñ½Éå}¥‘•¹Ñ¥Ñä ¤€¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}	M}!M °€‘¡…Í €¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}I5=Q}M!°€‘Í¡„€¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}1MQ}Me9}P°µ‘…Ñ” €Œœ€¤€¤ì($$‘Ñ¡¥Ì´ù±•…É}Á•¹‘¥¹œ €‘Á½ÍÑ}¥€¤ì($%‘•±•Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}1MQ}II=H€¤ì($$‘Ñ¡¥Ì´ùÍ•Ñ}ÍÑ…ÑÕÌ €‘Á½ÍÑ}¥°€‘ÍÑ…ÑÕÌ€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸µ…É­}±½…±}‘¥ÉÑä ¥¹Ð€‘Á½ÍÑ}¥€¤èÙ½¥ì($%¥˜€ €‘Á½ÍÑ}¥€ð€Äñð€„€‘Ñ¡¥Ì´ù¥Í}•¹…‰±• €‘Á½ÍÑ}¥€¤€¤É•ÑÕÉ¸ì($$‘Ñ¡¥Ì´ùÍ•Ñ}ÍÑ…ÑÕÌ €‘Á½ÍÑ}¥°MÑ…Ñ”èé1=1}%IQd€¤ì($%¥˜€ M•ÑÑ¥¹Ìèé•Ð €…ÕÑ½}•áÁ½ÉÐœ°€Ä€¤€˜˜M•ÑÑ¥¹ÌèéÉ•Á½}¥Í}½¹™¥ÕÉ• ¤€˜˜•Ñ}½ÁÑ¥½¸ M•ÑÑ¥¹ÌèéUQ!}=AQ%=8°€œœ€¤€˜˜€„ÝÁ}¹•áÑ}Í¡•‘Õ±• €•©‰}•áÁ½ÉÑ}‘½Õµ•¹Ðœ°l€‘Á½ÍÑ}¥t€¤€¤ì($$%ÝÁ}Í¡•‘Õ±•}Í¥¹±•}•Ù•¹Ð Ñ¥µ” ¤€¬€ÄÔ°€•©‰}•áÁ½ÉÑ}‘½Õµ•¹Ðœ°l€‘Á½ÍÑ}¥t€¤ì($%ô(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸±•…É}Á•¹‘¥¹œ ¥¹Ð€‘Á½ÍÑ}¥€¤èÙ½¥ì($%‘•±•Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}A9%9}M!€¤ì($%‘•±•Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}A9%9}!M €¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸Í•Ñ}ÍÑ…ÑÕÌ ¥¹Ð€‘Á½ÍÑ}¥°ÍÑÉ¥¹œ€‘ÍÑ…ÑÕÌ€¤èÙ½¥ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}MQQUL°€‘ÍÑ…ÑÕÌ€¤ì($%¥˜€ €„¥¹}…ÉÉ…ä €‘ÍÑ…ÑÕÌ°lMÑ…Ñ”èéI5=Q}A9%9°MÑ…Ñ”èéAA1e%9t°ÑÉÕ”€¤€¤€‘Ñ¡¥Ì´ù±•…É}Á•¹‘¥¹œ €‘Á½ÍÑ}¥€¤ì($%¥˜€ €„¥¹}…ÉÉ…ä €‘ÍÑ…ÑÕÌ°lMÑ…Ñ”èéII=H°MÑ…Ñ”èé=91%Pt°ÑÉÕ”€¤€¤‘•±•Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}1MQ}II=H€¤ì(%ô((%ÁÉ¥Ù…Ñ”™Õ¹Ñ¥½¸Í•Ñ}•ÉÉ½È ¥¹Ð€‘Á½ÍÑ}¥°ÍÑÉ¥¹œ€‘ÍÑ…ÑÕÌ°ÍÑÉ¥¹œ€‘µ•ÍÍ…”€¤èÙ½¥ì($$‘Ñ¡¥Ì´ù±•…É}Á•¹‘¥¹œ €‘Á½ÍÑ}¥€¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}MQQUL°€‘ÍÑ…ÑÕÌ€¤ì($%ÕÁ‘…Ñ•}Á½ÍÑ}µ•Ñ„ €‘Á½ÍÑ}¥°MÑ…Ñ”èé5Q}1MQ}II=H°ÍÕ‰ÍÑÈ Í…¹¥Ñ¥é•}Ñ•áÑ}™¥•± €‘µ•ÍÍ…”€¤°€À°€ÔÀÀ€¤€¤ì(%ô)ô(
+					$this->conflict( $post_id, 'The live Elementor document changed after the last synchronization.' );
+				}
+				$incoming      = $this->remote_payload( $post_id, $remote, $current );
+				$incoming_hash = CanonicalJson::hash( $incoming );
+				if ( ! hash_equals( $pending_hash, $incoming_hash ) ) {
+					throw new BridgeException( 'ejb_remote_changed', 'The checked GitHub content no longer matches the pending fingerprint.', 409 );
+				}
+
+				$snapshot_id = $this->snapshots->create( $post_id, $current, 'before_remote_apply', (string) $remote['sha'] );
+				$this->set_status( $post_id, State::APPLYING );
+				self::$applying = true;
+				try {
+					$this->documents->save_payload( $post_id, $incoming );
+					$readback = $this->live_payload( $post_id );
+					if ( ! hash_equals( $incoming_hash, CanonicalJson::hash( $readback ) ) ) {
+						throw new RuntimeException( 'Elementor roundtrip verification failed.' );
+					}
+				} catch ( Throwable $apply_error ) {
+					$this->rollback( $post_id, $snapshot_id, $current_hash, $apply_error );
+				} finally {
+					self::$applying = false;
+				}
+
+				$this->mark_synced( $post_id, $path, $incoming_hash, (string) $remote['sha'], State::VERIFIED );
+				return [ 'status' => State::VERIFIED, 'snapshot_id' => $snapshot_id, 'sha' => (string) $remote['sha'] ];
+			}
+		);
+	}
+
+	public function restore_snapshot( int $post_id, int $snapshot_id ): array {
+		return $this->locked(
+			$post_id,
+			function () use ( $post_id, $snapshot_id ): array {
+				$current = $this->live_payload( $post_id );
+				$restore = $this->validator->validate_array( $this->snapshots->payload( $snapshot_id, $post_id ), $this->documents->document_type( $post_id ) );
+				$this->snapshots->create( $post_id, $current, 'before_manual_restore', (string) get_post_meta( $post_id, State::META_REMOTE_SHA, true ) );
+				self::$applying = true;
+				try {
+					$this->documents->save_payload( $post_id, $restore );
+					if ( ! hash_equals( CanonicalJson::hash( $restore ), CanonicalJson::hash( $this->live_payload( $post_id ) ) ) ) {
+						throw new RuntimeException( 'Restored snapshot failed roundtrip verification.' );
+					}
+				} catch ( Throwable $restore_error ) {
+					$this->documents->save_payload( $post_id, $current );
+					if ( ! hash_equals( CanonicalJson::hash( $current ), CanonicalJson::hash( $this->live_payload( $post_id ) ) ) ) {
+						throw new RuntimeException( 'Snapshot restore failed and the pre-restore version could not be verified.', 0, $restore_error );
+					}
+					throw new RuntimeException( 'Snapshot restore failed. The pre-restore version was restored.', 0, $restore_error );
+				} finally {
+					self::$applying = false;
+				}
+				$this->clear_pending( $post_id );
+				$this->set_status( $post_id, State::LOCAL_DIRTY );
+				return [ 'status' => State::LOCAL_DIRTY ];
+			}
+		);
+	}
+
+	public function reset_base( int $post_id ): array {
+		return $this->locked(
+			$post_id,
+			function () use ( $post_id ): array {
+				foreach ( [ State::META_BASE_HASH, State::META_REMOTE_SHA, State::META_REMOTE_PATH, State::META_REPO_ID, State::META_PENDING_SHA, State::META_PENDING_HASH, State::META_LAST_ERROR, State::META_LAST_SYNC_AT ] as $key ) {
+					delete_post_meta( $post_id, $key );
+				}
+				$this->set_status( $post_id, State::LOCAL_DIRTY );
+				return [ 'status' => State::LOCAL_DIRTY ];
+			}
+		);
+	}
+
+	public function poll_enabled_documents(): void {
+		if ( ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
+			return;
+		}
+		$page = max( 1, (int) get_option( self::POLL_PAGE_OPTION, 1 ) );
+		$query = new \WP_Query( [ 'post_type' => array_values( get_post_types( [], 'names' ) ), 'post_status' => 'any', 'posts_per_page' => self::POLL_BATCH_SIZE, 'paged' => $page, 'orderby' => 'ID', 'order' => 'ASC', 'fields' => 'ids', 'meta_key' => State::META_ENABLED, 'meta_value' => '1' ] );
+		$max_pages = max( 1, (int) $query->max_num_pages );
+		foreach ( $query->posts as $id ) {
+			try { $this->check_remote( (int) $id ); } catch ( Throwable ) { continue; }
+		}
+		update_option( self::POLL_PAGE_OPTION, $page < $max_pages ? $page + 1 : 1, false );
+	}
+
+	public function status( int $post_id ): string {
+		$status = (string) get_post_meta( $post_id, State::META_STATUS, true );
+		return '' !== $status ? $status : State::LOCAL_DIRTY;
+	}
+
+	public function is_enabled( int $post_id ): bool {
+		return '1' === (string) get_post_meta( $post_id, State::META_ENABLED, true );
+	}
+
+	public function path_for( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! $post ) throw new RuntimeException( 'The WordPress document does not exist.' );
+		$folder = match ( $post->post_type ) { 'page' => 'pages', 'post' => 'posts', 'elementor_library' => 'templates', default => 'custom/' . sanitize_key( $post->post_type ) };
+		return trim( (string) Settings::get( 'repo_root', 'elementor' ) . '/' . $folder . '/' . $post_id . '.json', '/' );
+	}
+
+	private function locked( int $post_id, callable $callback ): array {
+		$token = $this->lock->acquire( $post_id );
+		try {
+			return $callback();
+		} catch ( Throwable $error ) {
+			if ( ! in_array( $this->status( $post_id ), [ State::CONFLICT, State::ERROR ], true ) ) {
+				$this->set_error( $post_id, State::ERROR, $error->getMessage() );
+			}
+			throw $error;
+		} finally {
+			$this->lock->release( $post_id, $token );
+		}
+	}
+
+	private function require_sync_ready( int $post_id ): void {
+		if ( ! $this->is_enabled( $post_id ) ) throw new BridgeException( 'ejb_sync_disabled', 'Enable synchronization for this document first.', 409 );
+		$this->github->assert_private_repository();
+		$this->assert_repository_identity( $post_id );
+	}
+
+	private function live_payload( int $post_id ): array {
+		return $this->validator->validate_array( $this->documents->payload( $post_id ), $this->documents->document_type( $post_id ) );
+	}
+
+	private function remote_payload( int $post_id, array $remote, array $live ): array {
+		$payload = $this->validator->decode( (string) $remote['content'], $this->documents->document_type( $post_id ) );
+		$payload['title'] = (string) $live['title'];
+		return $payload;
+	}
+
+	private function rollback( int $post_id, int $snapshot_id, string $expected_hash, Throwable $cause ): never {
+		try {
+			$this->documents->save_payload( $post_id, $this->snapshots->payload( $snapshot_id, $post_id ) );
+			if ( ! hash_equals( $expected_hash, CanonicalJson::hash( $this->live_payload( $post_id ) ) ) ) {
+				throw new RuntimeException( 'Rollback verification failed.' );
+			}
+		} catch ( Throwable $rollback_error ) {
+			$this->set_error( $post_id, State::ERROR, 'Apply failed and rollback could not be verified.' );
+			throw new RuntimeException( 'Apply failed and rollback could not be verified.', 0, $rollback_error );
+		}
+		$this->set_error( $post_id, State::ERROR, 'Apply failed; the local snapshot was restored.' );
+		throw new RuntimeException( 'Apply failed. The previous Elementor version was restored.', 0, $cause );
+	}
+
+	private function assert_repository_identity( int $post_id ): void {
+		if ( '' === (string) get_post_meta( $post_id, State::META_BASE_HASH, true ) ) return;
+		$known = (string) get_post_meta( $post_id, State::META_REPO_ID, true );
+		$current = Settings::repository_identity();
+		if ( '' === $known || '' === $current || ! hash_equals( $known, $current ) ) {
+			$this->conflict( $post_id, 'The GitHub repository, branch, or JSON root changed from the trusted synchronization base.' );
+		}
+	}
+
+	private function conflict( int $post_id, string $message ): never {
+		$this->set_error( $post_id, State::CONFLICT, $message );
+		throw new BridgeException( 'ejb_sync_conflict', $message . ' Reset or re-check the synchronization base before continuing.', 409 );
+	}
+
+	private function mark_synced( int $post_id, string $path, string $hash, string $sha, string $status ): void {
+		update_post_meta( $post_id, State::META_REMOTE_PATH, $path );
+		update_post_meta( $post_id, State::META_REPO_ID, Settings::repository_identity() );
+		update_post_meta( $post_id, State::META_BASE_HASH, $hash );
+		update_post_meta( $post_id, State::META_REMOTE_SHA, $sha );
+		update_post_meta( $post_id, State::META_LAST_SYNC_AT, gmdate( 'c' ) );
+		$this->clear_pending( $post_id );
+		delete_post_meta( $post_id, State::META_LAST_ERROR );
+		$this->set_status( $post_id, $status );
+	}
+
+	private function mark_local_dirty( int $post_id ): void {
+		if ( $post_id < 1 || ! $this->is_enabled( $post_id ) ) return;
+		$this->set_status( $post_id, State::LOCAL_DIRTY );
+		if ( Settings::get( 'auto_export', 1 ) && Settings::repo_is_configured() && get_option( Settings::AUTH_OPTION, '' ) && ! wp_next_scheduled( 'ejb_export_document', [ $post_id ] ) ) {
+			wp_schedule_single_event( time() + 15, 'ejb_export_document', [ $post_id ] );
+		}
+	}
+
+	private function clear_pending( int $post_id ): void {
+		delete_post_meta( $post_id, State::META_PENDING_SHA );
+		delete_post_meta( $post_id, State::META_PENDING_HASH );
+	}
+
+	private function set_status( int $post_id, string $status ): void {
+		update_post_meta( $post_id, State::META_STATUS, $status );
+		if ( ! in_array( $status, [ State::REMOTE_PENDING, State::APPLYING ], true ) ) $this->clear_pending( $post_id );
+		if ( ! in_array( $status, [ State::ERROR, State::CONFLICT ], true ) ) delete_post_meta( $post_id, State::META_LAST_ERROR );
+	}
+
+	private function set_error( int $post_id, string $status, string $message ): void {
+		$this->clear_pending( $post_id );
+		update_post_meta( $post_id, State::META_STATUS, $status );
+		update_post_meta( $post_id, State::META_LAST_ERROR, substr( sanitize_text_field( $message ), 0, 500 ) );
+	}
+}

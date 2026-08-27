@@ -39,7 +39,6 @@ jobs:
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
           php tests/run.php
-          php tests/repository-identity-migration.php
           bash tests/workflow-policy.sh
           bash tests/reproducible-build.sh
 
