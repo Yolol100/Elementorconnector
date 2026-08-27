@@ -1,7 +1,10 @@
 includes:
     - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
 parameters:
     level: 5
+    treatPhpDocTypesAsCertain: false
+    rememberPossiblyImpureFunctionValues: false
     paths:
         - elementor-json-bridge.php
         - uninstall.php
