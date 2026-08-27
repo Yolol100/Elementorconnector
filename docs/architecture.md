@@ -18,6 +18,10 @@ A trusted base consists of:
 
 Changing repository settings invalidates that base. The operator must explicitly reset it before establishing a new one.
 
+### Legacy trusted bases
+
+Older 0.1.0 synchronization state can contain a trusted base without the repository-identity field. That state is never bound to the current repository on configuration alone. Before the identity is added, the migration requires the saved GitHub path to still be the current path, the saved GitHub blob SHA to still match, and the remote canonical JSON fingerprint to still equal the saved base fingerprint. A mismatch remains fail-closed and requires operator review/reset. Transport failures remain retryable rather than being treated as proof of a mismatch.
+
 ## States
 
 - `clean`: local and trusted remote base match;

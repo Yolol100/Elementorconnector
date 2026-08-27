@@ -24,4 +24,9 @@ if ( false !== $method->invoke( null, '', $sha, $sha, $base ) ) {
 	throw new RuntimeException( 'Incomplete legacy state was accepted.' );
 }
 
+$source = file_get_contents( dirname( __DIR__ ) . '/includes/Sync/LegacyRepositoryMigration.php' );
+if ( false === $source || ! str_contains( $source, "add_action( 'admin_init'" ) || ! str_contains( $source, "add_action( 'rest_api_init'" ) || ! str_contains( $source, "add_action( 'wp_loaded'" ) ) {
+	throw new RuntimeException( 'Migration execution hooks are incomplete.' );
+}
+
 echo "PASS legacy-repository-identity-migration\n";

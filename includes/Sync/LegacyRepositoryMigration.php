@@ -12,7 +12,7 @@ use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 defined( 'ABSPATH' ) || exit;
 
 final class LegacyRepositoryMigration {
-	private const BATCH_SIZE              = 20;
+	private const BATCH_SIZE              = 10;
 	private const META_ATTEMPTED_IDENTITY = '_ejb_repo_identity_migration_attempted';
 
 	private bool $ran = false;
@@ -27,7 +27,7 @@ final class LegacyRepositoryMigration {
 	public function register(): void {
 		add_action( 'admin_init', [ $this, 'run' ], 1 );
 		add_action( 'rest_api_init', [ $this, 'run' ], 1 );
-		add_action( 'init', [ $this, 'run_for_cron' ], 1 );
+		add_action( 'wp_loaded', [ $this, 'run_for_cron' ], 1 );
 	}
 
 	public function run_for_cron(): void {
