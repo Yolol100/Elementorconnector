@@ -54,10 +54,18 @@ final class Client {
 
 		$sha = (string) $response['sha'];
 		if ( 'base64' === ( $response['encoding'] ?? '' ) && isset( $response['content'] ) ) {
-			$content = base64_decode( preg_replace( '/\s+/', '', (string) $response['content'] ) ?? '', true );
+			$encoded = preg_replace( '/\s+/', '', (string) $response['content'] );
+			if ( ! is_string( $encoded ) ) {
+				$encoded = '';
+			}
+			$content = base64_decode( $encoded, true );
 		} else {
-			$blob = $this->get_blob( $sha );
-			$content = base64_decode( preg_replace( '/\s+/', '', (string) ( $blob['content'] ?? '' ) ) ?? '', true );
+			$blob    = $this->get_blob( $sha );
+			$encoded = preg_replace( '/\s+/', '', (string) ( $blob['content'] ?? '' ) );
+			if ( ! is_string( $encoded ) ) {
+				$encoded = '';
+			}
+			$content = base64_decode( $encoded, true );
 		}
 		if ( false === $content ) {
 			throw new RuntimeException( 'GitHub returned invalid base64 file content.' );
@@ -111,13 +119,13 @@ final class Client {
 		$args = [
 			'method'              => $method,
 			'timeout'             => 20,
-			'redirects'           => 0,
+			'redirection'         => 0,
 			'limit_response_size' => 8_000_000,
 			'headers'             => [
-				'Accept'               => $accept,
-				'Authorization'        => 'Bearer ' . $this->auth->access_token(),
-				'X-GitHub-Api-Version' => self::API_VERSION,
-				'User-Agent'           => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
+				'Accept'                 => $accept,
+				'Authorization'          => 'Bearer ' . $this->auth->access_token(),
+				'X-GitHub-Api-Version'   => self::API_VERSION,
+				'User-Agent'             => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
 			],
 		];
 		if ( null !== $json ) {
@@ -131,19 +139,19 @@ final class Client {
 
 		$response = wp_safe_remote_request( $url, $args );
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'GitHub request failed: ' . $response->get_error_message() );
+			throw new RuntimeException( 'GitHub request failed: ' . esc_html( $response->get_error_message() ) );
 		}
 
 		$status = wp_remote_retrieve_response_code( $response );
 		$this->capture_rate_limit( $response, $status );
-		$body   = wp_remote_retrieve_body( $response );
-		$data   = '' === $body ? [] : json_decode( $body, true );
+		$body = wp_remote_retrieve_body( $response );
+		$data = '' === $body ? [] : json_decode( $body, true );
 		if ( in_array( $status, $allowed_statuses, true ) ) {
 			return is_array( $data ) ? [ '_status' => $status ] + $data : [ '_status' => $status ];
 		}
 		if ( $status < 200 || $status >= 300 ) {
 			$message = is_array( $data ) && is_string( $data['message'] ?? null ) ? $data['message'] : 'GitHub API error.';
-			throw new RuntimeException( sprintf( 'GitHub returned HTTP %d: %s', $status, sanitize_text_field( $message ) ) );
+			throw new RuntimeException( esc_html( sprintf( 'GitHub returned HTTP %d: %s', $status, $message ) ) );
 		}
 		if ( ! is_array( $data ) ) {
 			throw new RuntimeException( 'GitHub returned malformed JSON.' );
@@ -165,7 +173,7 @@ final class Client {
 	private function capture_rate_limit( array $response, int $status ): void {
 		$retry_after = (int) wp_remote_retrieve_header( $response, 'retry-after' );
 		$remaining   = (string) wp_remote_retrieve_header( $response, 'x-ratelimit-remaining' );
-		$reset_at    = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
+		$reset_at   = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
 
 		if ( 429 !== $status && $retry_after < 1 && ! ( 403 === $status && '0' === $remaining ) ) {
 			return;
