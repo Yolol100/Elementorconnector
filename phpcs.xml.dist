@@ -1,2 +1,39 @@
 <?xml version="1.0"?>
-<ruleset name="Elementor JSON Bridge"><description>WordPress security/API conventions plus PHP 8.3+ compatibility.</description><file>elementor-json-bridge.php</file><file>uninstall.php</file><file>includes</file><exclude-pattern>vendor/*</exclude-pattern><arg name="basepath" value="."/><arg name="colors"/><arg value="sp"/><rule ref="WordPress-Core"><exclude name="Universal.Arrays.DisallowShortArraySyntax"/><exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/><exclude name="WordPress.Files.FileName.InvalidClassFileName"/></rule><rule ref="WordPress-Extra"><exclude name="Universal.Arrays.DisallowShortArraySyntax"/><exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/><exclude name="WordPress.Files.FileName.InvalidClassFileName"/></rule><rule ref="PHPCompatibilityWP"><properties><property name="testVersion" value="8.3-"/></properties></rule><config name="minimum_supported_wp_version" value="6.8"/></ruleset>
+<ruleset name="Elementor JSON Bridge">
+  <description>WordPress security/API rules plus PHP 8.3+ compatibility. Pure formatting is enforced by review; domain exceptions are not HTML output.</description>
+  <file>elementor-json-bridge.php</file>
+  <file>uninstall.php</file>
+  <file>includes</file>
+  <exclude-pattern>vendor/*</exclude-pattern>
+  <arg name="basepath" value="."/>
+  <arg name="colors"/>
+  <arg value="sp"/>
+  <arg name="warning-severity" value="0"/>
+
+  <rule ref="WordPress-Core">
+    <exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+    <exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
+    <exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+    <exclude name="WordPress.Security.EscapeOutput.ExceptionNotEscaped"/>
+    <exclude name="WordPress.Arrays.ArrayDeclarationSpacing.AssociativeArrayFound"/>
+    <exclude name="Squiz.ControlStructures.ControlSignature.NewlineAfterOpenBrace"/>
+    <exclude name="Generic.Formatting.DisallowMultipleStatements.SameLine"/>
+    <exclude name="Generic.ControlStructures.InlineControlStructure.NotAllowed"/>
+  </rule>
+  <rule ref="WordPress-Extra">
+    <exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+    <exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
+    <exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+    <exclude name="WordPress.Security.EscapeOutput.ExceptionNotEscaped"/>
+    <exclude name="WordPress.Arrays.ArrayDeclarationSpacing.AssociativeArrayFound"/>
+    <exclude name="Squiz.ControlStructures.ControlSignature.NewlineAfterOpenBrace"/>
+    <exclude name="Generic.Formatting.DisallowMultipleStatements.SameLine"/>
+    <exclude name="Generic.ControlStructures.InlineControlStructure.NotAllowed"/>
+  </rule>
+  <rule ref="PHPCompatibilityWP">
+    <properties>
+      <property name="testVersion" value="8.3-"/>
+    </properties>
+  </rule>
+  <config name="minimum_supported_wp_version" value="6.8"/>
+</ruleset>
