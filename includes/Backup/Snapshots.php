@@ -58,6 +58,15 @@ final class Snapshots {
 		if ( ! is_array( $data ) ) {
 			throw new RuntimeException( 'The rollback snapshot is damaged.' );
 		}
+
+		$stored_hash = get_post_meta( $snapshot_id, '_ejb_snapshot_hash', true );
+		if ( ! is_string( $stored_hash ) || ! preg_match( '/^[a-f0-9]{64}$/', $stored_hash ) ) {
+			throw new RuntimeException( 'The rollback snapshot has no valid integrity fingerprint.' );
+		}
+		if ( ! hash_equals( $stored_hash, CanonicalJson::hash( $data ) ) ) {
+			throw new RuntimeException( 'The rollback snapshot failed its integrity check.' );
+		}
+
 		return $data;
 	}
 
