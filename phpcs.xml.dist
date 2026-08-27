@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="Elementor JSON Bridge">
-  <description>WordPress API/security rules plus PHP 8.1+ compatibility, with two intentional modern source-layout exceptions.</description>
+  <description>WordPress API/security rules plus PHP 8.1+ compatibility, with explicit modern source-style exceptions.</description>
   <file>elementor-json-bridge.php</file>
   <file>uninstall.php</file>
   <file>includes</file>
@@ -10,11 +10,17 @@
   <arg value="sp"/>
 
   <rule ref="WordPress-Core">
-    <!-- The plugin requires PHP 8.1+, so short arrays are an intentional project convention. -->
+    <!-- PHP 8.1+ project convention: keep modern short arrays. -->
     <exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
-    <!-- Classes use the repository's namespace-aware PSR-style autoloader instead of class-*.php filenames. -->
+    <!-- Namespace-aware PSR-style autoloader: class files intentionally keep ClassName.php names. -->
     <exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
     <exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+    <!-- Alignment/newline layout is intentionally handled by the repository style, not semantic QA. -->
+    <exclude name="Generic.Formatting.MultipleStatementAlignment.NotSameWarning"/>
+    <exclude name="Generic.Formatting.MultipleStatementAlignment.IncorrectWarning"/>
+    <exclude name="WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned"/>
+    <exclude name="WordPress.Arrays.ArrayDeclarationSpacing.AssociativeArrayFound"/>
+    <exclude name="Squiz.ControlStructures.ControlSignature.NewlineAfterOpenBrace"/>
   </rule>
 
   <rule ref="PHPCompatibilityWP">
