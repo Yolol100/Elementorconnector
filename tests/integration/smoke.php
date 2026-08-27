@@ -49,41 +49,94 @@ try {
 	$snapshots = new Snapshots();
 	$type      = $documents->document_type( $post_id );
 
-	$payload = [
-		'title'         => 'EJB Smoke Verified',
-		'type'          => $type,
-		'version'       => PayloadValidator::FORMAT_VERSION,
-		'page_settings' => [],
-		'content'       => [
-			[
-				'id'       => 'ejbsmoke',
-				'elType'   => 'container',
-				'settings' => [],
-				'elements' => [],
+	// Seed Elementor once with a minimal document. Elementor is allowed to normalize
+	// this seed because real bridge workflows always start from a subsequent export.
+	$seed = $validator->validate_array(
+		[
+			'title'         => 'EJB Smoke Baseline',
+			'type'          => $type,
+			'version'       => PayloadValidator::FORMAT_VERSION,
+			'page_settings' => [],
+			'content'       => [
+				[
+					'id'       => 'ejbcontainer',
+					'elType'   => 'container',
+					'settings' => [],
+					'elements' => [
+						[
+							'id'         => 'ejbheading',
+							'elType'     => 'widget',
+							'widgetType' => 'heading',
+							'settings'   => [ 'title' => 'Bridge baseline heading' ],
+							'elements'   => [],
+						],
+					],
+				],
 			],
 		],
-	];
+		$type
+	);
+	$documents->save_payload( $post_id, $seed );
 
-	$payload = $validator->validate_array( $payload, $type );
-	$documents->save_payload( $post_id, $payload );
+	// The actual synchronization contract starts here: use Elementor's own exported,
+	// persisted representation as the trusted base and then edit that JSON.
+	$baseline      = $validator->validate_array( $documents->payload( $post_id ), $type );
+	$baseline_hash = CanonicalJson::hash( $baseline );
+	$documents->save_payload( $post_id, $baseline );
+	$stable_baseline = $validator->validate_array( $documents->payload( $post_id ), $type );
+	if ( ! hash_equals( $baseline_hash, CanonicalJson::hash( $stable_baseline ) ) ) {
+		throw new RuntimeException( 'An Elementor-exported document is not stable across an unchanged save/readback.' );
+	}
+
+	$snapshot_id = $snapshots->create( $post_id, $baseline, 'smoke' );
+	$snapshot    = $snapshots->payload( $snapshot_id, $post_id );
+	if ( ! hash_equals( $baseline_hash, CanonicalJson::hash( $snapshot ) ) ) {
+		throw new RuntimeException( 'The local rollback snapshot did not preserve the exported baseline.' );
+	}
+
+	$edited          = $baseline;
+	$edited['title'] = 'EJB Smoke Verified';
+	$heading_changed = false;
+	$edit_heading    = static function ( array &$elements ) use ( &$edit_heading, &$heading_changed ): void {
+		foreach ( $elements as &$element ) {
+			if ( 'ejbheading' === ( $element['id'] ?? '' ) ) {
+				$element['settings']['title'] = 'Bridge remote edit verified';
+				$heading_changed              = true;
+				return;
+			}
+			if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+				$edit_heading( $element['elements'] );
+				if ( $heading_changed ) {
+					return;
+				}
+			}
+		}
+	};
+	$edit_heading( $edited['content'] );
+	if ( ! $heading_changed ) {
+		throw new RuntimeException( 'The seeded heading was not present in Elementor export data.' );
+	}
+	$edited = $validator->validate_array( $edited, $type );
+
+	$documents->save_payload( $post_id, $edited );
 	$readback = $validator->validate_array( $documents->payload( $post_id ), $type );
-
-	if ( ! hash_equals( CanonicalJson::hash( $payload ), CanonicalJson::hash( $readback ) ) ) {
-		throw new RuntimeException( 'Elementor changed the smoke payload during the save/readback roundtrip.' );
+	if ( ! hash_equals( CanonicalJson::hash( $edited ), CanonicalJson::hash( $readback ) ) ) {
+		throw new RuntimeException( 'An edited Elementor-exported document changed during save/readback.' );
 	}
 	if ( 'EJB Smoke Verified' !== get_the_title( $post_id ) ) {
 		throw new RuntimeException( 'The WordPress document title did not roundtrip.' );
 	}
 
-	$snapshot_id = $snapshots->create( $post_id, $readback, 'smoke' );
-	$snapshot    = $snapshots->payload( $snapshot_id, $post_id );
-	if ( ! hash_equals( CanonicalJson::hash( $readback ), CanonicalJson::hash( $snapshot ) ) ) {
-		throw new RuntimeException( 'The local rollback snapshot did not roundtrip.' );
+	// Exercise the same persisted snapshot payload used by rollback and verify exact restore.
+	$documents->save_payload( $post_id, $snapshot );
+	$restored = $validator->validate_array( $documents->payload( $post_id ), $type );
+	if ( ! hash_equals( $baseline_hash, CanonicalJson::hash( $restored ) ) ) {
+		throw new RuntimeException( 'The Elementor rollback snapshot did not restore exactly.' );
 	}
 
 	WP_CLI::success(
 		sprintf(
-			'Elementor JSON Bridge smoke test passed on WordPress %s, Elementor %s, PHP %s.',
+			'Elementor JSON Bridge export-edit-readback-rollback smoke passed on WordPress %s, Elementor %s, PHP %s.',
 			get_bloginfo( 'version' ),
 			ELEMENTOR_VERSION,
 			PHP_VERSION
