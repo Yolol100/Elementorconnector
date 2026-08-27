@@ -104,7 +104,7 @@ jobs:
 
       - name: Destroy smoke environment
         if: always()
-        run: wp-env destroy
+        run: wp-env destroy --force
 
   plugin-check:
     name: Plugin Check release-package canary
