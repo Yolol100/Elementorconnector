@@ -14,12 +14,12 @@ final class Autoloader {
 		spl_autoload_register( [ self::class, 'load' ] );
 	}
 
-	private static function load( string $class ): void {
-		if ( ! str_starts_with( $class, self::PREFIX ) ) {
+	private static function load( string $class_name ): void {
+		if ( ! str_starts_with( $class_name, self::PREFIX ) ) {
 			return;
 		}
 
-		$relative = substr( $class, strlen( self::PREFIX ) );
+		$relative = substr( $class_name, strlen( self::PREFIX ) );
 		$file     = self::$base_dir . str_replace( '\\', DIRECTORY_SEPARATOR, $relative ) . '.php';
 
 		if ( is_readable( $file ) ) {
