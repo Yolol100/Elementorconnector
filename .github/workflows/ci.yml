@@ -97,4 +97,4 @@ jobs:
       - name: Bridge runtime smoke
         run: |
           cp tests/wp-runtime.php dist/elementor-json-bridge/.ejb-runtime-smoke.php
-          wp-env run cli wp eval-file wp-content/plugins/elementor-json-bridge/.ejb-runtime-smoke.php
+          wp-env run cli wp eval 'require WP_PLUGIN_DIR . "/elementor-json-bridge/.ejb-runtime-smoke.php";'
