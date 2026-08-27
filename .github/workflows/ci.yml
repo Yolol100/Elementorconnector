@@ -88,6 +88,12 @@ jobs:
           ignore-codes: WordPress.Security.EscapeOutput.ExceptionNotEscaped
           include-experimental: false
 
+      - name: Elementor normalization probe
+        run: |
+          cp tests/wp-normalization-probe.php dist/elementor-json-bridge/.ejb-normalization-probe.php
+          wp-env run cli wp eval 'require WP_PLUGIN_DIR . "/elementor-json-bridge/.ejb-normalization-probe.php";'
+          rm -f dist/elementor-json-bridge/.ejb-normalization-probe.php
+
       - name: Controlled bridge runtime
         run: |
           cp tests/wp-runtime.php dist/elementor-json-bridge/.ejb-runtime-smoke.php
