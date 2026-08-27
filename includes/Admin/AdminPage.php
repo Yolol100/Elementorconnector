@@ -26,7 +26,6 @@ final class AdminPage {
 		add_action( 'admin_menu', [ $this, 'menu' ] );
 		add_action( 'admin_init', [ $this, 'settings' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets' ] );
-		add_action( 'admin_notices', [ $this, 'dependency_notice' ] );
 	}
 
 	public function menu(): void {
@@ -64,13 +63,6 @@ final class AdminPage {
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 			]
 		);
-	}
-
-	public function dependency_notice(): void {
-		if ( class_exists( '\\Elementor\\Plugin' ) || ! current_user_can( Hooks::CAPABILITY ) ) {
-			return;
-		}
-		echo '<div class="notice notice-error"><p>' . esc_html__( 'Elementor JSON Bridge requires Elementor to be active.', 'elementor-json-bridge' ) . '</p></div>';
 	}
 
 	public function render(): void {
@@ -161,19 +153,21 @@ final class AdminPage {
 			$post_types[] = 'elementor_library';
 		}
 
-		$ids = get_posts(
+		$current_page = isset( $_GET['ejb_page_num'] ) ? max( 1, absint( wp_unslash( $_GET['ejb_page_num'] ) ) ) : 1;
+		$query        = new \WP_Query(
 			[
 				'post_type'      => $post_types,
 				'post_status'    => 'any',
-				'posts_per_page' => 200,
+				'posts_per_page' => 50,
+				'paged'          => $current_page,
 				'orderby'        => 'modified',
 				'order'          => 'DESC',
 				'fields'         => 'ids',
-				'no_found_rows'  => true,
 				'meta_key'       => '_elementor_edit_mode',
 				'meta_value'     => 'builder',
 			]
 		);
+		$ids = $query->posts;
 
 		if ( ! $ids ) {
 			echo '<p>' . esc_html__( 'No Elementor documents were found.', 'elementor-json-bridge' ) . '</p>';
@@ -217,5 +211,26 @@ final class AdminPage {
 		</table>
 		</div>
 		<?php
+		if ( $query->max_num_pages > 1 ) {
+			$base = str_replace(
+				'999999999',
+				'%#%',
+				add_query_arg( 'ejb_page_num', '999999999', admin_url( 'tools.php?page=' . self::SLUG ) )
+			);
+			echo '<div class="tablenav"><div class="tablenav-pages">';
+			echo wp_kses_post(
+				paginate_links(
+					[
+						'base'      => $base,
+						'format'    => '',
+						'current'   => $current_page,
+						'total'     => (int) $query->max_num_pages,
+						'prev_text' => esc_html__( 'Previous', 'elementor-json-bridge' ),
+						'next_text' => esc_html__( 'Next', 'elementor-json-bridge' ),
+					]
+				)
+			);
+			echo '</div></div>';
+		}
 	}
 }

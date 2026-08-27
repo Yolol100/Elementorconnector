@@ -18,6 +18,7 @@ final class State {
 	public const META_BASE_HASH     = '_ejb_base_hash';
 	public const META_REMOTE_SHA    = '_ejb_remote_sha';
 	public const META_REMOTE_PATH   = '_ejb_remote_path';
+	public const META_REPO_ID       = '_ejb_repo_identity';
 	public const META_PENDING_SHA   = '_ejb_pending_sha';
 	public const META_PENDING_HASH  = '_ejb_pending_hash';
 	public const META_LAST_ERROR    = '_ejb_last_error';

@@ -2,7 +2,8 @@
 Contributors: webactueel
 Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
-Requires PHP: 8.1
+Tested up to: 7.1
+Requires PHP: 8.3
 Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -20,12 +21,14 @@ Core safety rules:
 * Elementor is read and written through Elementor's document API.
 * Existing GitHub files with unknown history are never overwritten.
 * A SHA-256 base fingerprint detects simultaneous local and remote changes.
-* Every remote apply creates a local WordPress snapshot first.
+* Each trusted base is bound to the configured GitHub owner, repository, branch, and JSON root.
+* Every remote apply creates a local WordPress snapshot first, and snapshot integrity is verified before restore.
 * Incoming JSON is structurally validated before save.
 * The saved document is read back and fingerprinted after save.
 * A failed roundtrip triggers automatic rollback to the local snapshot.
 * Remote changes are never auto-applied in version 0.1.0; an administrator must click Apply GitHub.
 * GitHub tokens are never exposed to browser JavaScript or stored in logs.
+* The JSON `title` is informational; GitHub JSON cannot rename the WordPress page, post, or template.
 
 == GitHub App setup ==
 
@@ -38,7 +41,9 @@ Core safety rules:
 7. Enter the repository owner, repository name, branch, and JSON folder.
 8. Click Connect GitHub and authorize the displayed device code.
 
-The private repository itself is not created by this plugin. Create it first in GitHub and keep it private when it contains real website content.
+The private repository itself is not created by this plugin. Create it first in GitHub and keep it private when it contains real website content. The bridge requires Elementor 4.2.3 or newer.
+
+Device Flow is intentionally administrator-only. Always verify that the browser is on `github.com` and that the displayed code matches the code shown by WordPress before authorizing it.
 
 == Workflow ==
 
@@ -50,7 +55,7 @@ The private repository itself is not created by this plugin. Create it first in 
 6. The plugin creates a snapshot, validates the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
 7. If verification fails, the snapshot is restored.
 
-Normal WordPress or Elementor saves can be exported automatically when Automatic export is enabled. An automatic export refuses to overwrite a GitHub file whose SHA no longer matches the known base.
+Normal WordPress or Elementor saves can be exported automatically when Automatic export is enabled. An automatic export refuses to overwrite a GitHub file whose SHA no longer matches the known base. Changing the configured repository, branch, or JSON root invalidates the old synchronization base and requires an explicit Reset base before synchronization can continue.
 
 == Repository layout ==
 
@@ -67,7 +72,7 @@ Each file uses Elementor's documented document wrapper:
 
 The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. These bridge files are not promised as drop-in Template Library imports for live pages/posts; saved Elementor Library templates keep their own template document type.
 
-It does not convert V3 to V4, V4 to V3, invent site IDs, or rewrite dynamic references.
+It does not convert V3 to V4, V4 to V3, invent site IDs, rewrite dynamic references, or accept GitHub changes to the WordPress document title. The exported `title` is metadata for reviewers only.
 
 == Security ==
 
@@ -75,10 +80,9 @@ Only users with the custom `manage_elementor_json_bridge` capability can use the
 
 Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization.
 
-GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. If neither encryption primitive exists, GitHub credentials are not stored.
+GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. If neither encryption primitive exists, GitHub credentials are not stored. The encryption key is derived from WordPress salts; rotating those salts intentionally invalidates the stored GitHub session and requires reconnecting GitHub.
 
 The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does not expose an inbound public webhook.
-
 
 == External service ==
 
@@ -86,16 +90,13 @@ Elementor JSON Bridge uses GitHub as an external storage and version-control ser
 
 Data sent to GitHub can include the selected repository owner/name/branch, Elementor document JSON, document IDs in file paths, commit messages, and the GitHub authorization requests needed for Device Flow and repository access. Elementor JSON can contain website content and references to site-specific data, so use a private repository and review what you synchronize.
 
-The plugin connects only to GitHub's documented HTTPS endpoints at `github.com` and `api.github.com`. GitHub's own terms and privacy policy apply to data sent there:
-
-* GitHub Terms of Service: https://docs.github.com/en/site-policy/github-terms/github-terms-of-service
-* GitHub Privacy Statement: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+The plugin connects only to GitHub's documented HTTPS endpoints at `github.com` and `api.github.com`. GitHub's own terms and privacy policy apply to data sent there.
 
 No Elementor JSON is sent to OpenAI by this plugin. ChatGPT or Codex access is a separate GitHub connection controlled outside WordPress.
 
 == Backups and rollback ==
 
-Before applying GitHub JSON or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained.
+Before applying GitHub JSON or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained. A stored SHA-256 fingerprint is checked before any snapshot can be restored.
 
 GitHub commit history is useful version history but is not treated as the only backup.
 
@@ -107,6 +108,7 @@ Version 0.1.0 is intentionally conservative:
 * The plugin performs structural validation and exact post-save roundtrip verification, but it cannot prove every widget, add-on, dynamic tag, Theme Builder condition, form action, or site-specific dependency is valid.
 * Production use should be verified on staging first, especially for Elementor Pro, Theme Builder, Loops, Forms, WooCommerce, Dynamic Tags, Components, and Atomic/V4 content.
 * The GitHub App must already exist and be installed on the selected repository.
+* Version 0.1.0 requires WordPress 6.8+, PHP 8.3+, and Elementor 4.2.3+.
 
 == Uninstall ==
 

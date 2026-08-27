@@ -43,20 +43,6 @@ final class Documents {
 			throw new RuntimeException( 'Elementor rejected the document save.' );
 		}
 
-		$post = get_post( $post_id );
-		if ( $post && (string) $post->post_title !== (string) $payload['title'] ) {
-			$updated = wp_update_post(
-				[
-					'ID'         => $post_id,
-					'post_title' => (string) $payload['title'],
-				],
-				true
-			);
-			if ( is_wp_error( $updated ) ) {
-				throw new RuntimeException( 'WordPress could not update the document title.' );
-			}
-		}
-
 		clean_post_cache( $post_id );
 	}
 

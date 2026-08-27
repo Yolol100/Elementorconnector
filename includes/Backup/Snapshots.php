@@ -10,6 +10,7 @@ defined( 'ABSPATH' ) || exit;
 final class Snapshots {
 	public const POST_TYPE = 'ejb_snapshot';
 	private const RETENTION = 10;
+	private const HASH_META = '_ejb_snapshot_hash';
 
 	public function register(): void {
 		register_post_type(
@@ -40,7 +41,7 @@ final class Snapshots {
 			throw new RuntimeException( 'Could not create a local rollback snapshot.' );
 		}
 
-		update_post_meta( $id, '_ejb_snapshot_hash', CanonicalJson::hash( $payload ) );
+		update_post_meta( $id, self::HASH_META, CanonicalJson::hash( $payload ) );
 		update_post_meta( $id, '_ejb_snapshot_reason', sanitize_key( $reason ) );
 		update_post_meta( $id, '_ejb_snapshot_remote_sha', sanitize_text_field( $remote_sha ) );
 		update_post_meta( $id, '_ejb_snapshot_user', get_current_user_id() );
@@ -54,10 +55,17 @@ final class Snapshots {
 		if ( ! $post || self::POST_TYPE !== $post->post_type || $source_id !== (int) $post->post_parent ) {
 			throw new RuntimeException( 'The rollback snapshot does not belong to this document.' );
 		}
+
 		$data = json_decode( (string) $post->post_content, true );
 		if ( ! is_array( $data ) ) {
 			throw new RuntimeException( 'The rollback snapshot is damaged.' );
 		}
+
+		$stored_hash = (string) get_post_meta( $snapshot_id, self::HASH_META, true );
+		if ( '' === $stored_hash || ! hash_equals( $stored_hash, CanonicalJson::hash( $data ) ) ) {
+			throw new RuntimeException( 'The rollback snapshot failed its integrity check.' );
+		}
+
 		return $data;
 	}
 

@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\GitHub;
 
 use RuntimeException;
 use Webactueel\ElementorJsonBridge\Settings;
+use Webactueel\ElementorJsonBridge\Support\BridgeException;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -28,7 +29,7 @@ final class Client {
 	public function assert_private_repository(): void {
 		$repository = $this->repository();
 		if ( empty( $repository['private'] ) ) {
-			throw new RuntimeException( 'For safety, Elementor JSON Bridge only writes to private GitHub repositories.' );
+			throw new BridgeException( 'ejb_public_repository', 'For safety, Elementor JSON Bridge only writes to private GitHub repositories.', 409 );
 		}
 	}
 
@@ -49,26 +50,19 @@ final class Client {
 			return null;
 		}
 		if ( 'file' !== ( $response['type'] ?? '' ) || empty( $response['sha'] ) ) {
-			throw new RuntimeException( 'GitHub returned an unexpected file response.' );
+			throw new BridgeException( 'ejb_github_invalid_response', 'GitHub returned an unexpected file response.', 502 );
 		}
 
 		$sha = (string) $response['sha'];
 		if ( 'base64' === ( $response['encoding'] ?? '' ) && isset( $response['content'] ) ) {
 			$encoded = preg_replace( '/\s+/', '', (string) $response['content'] );
-			if ( ! is_string( $encoded ) ) {
-				$encoded = '';
-			}
-			$content = base64_decode( $encoded, true );
 		} else {
 			$blob    = $this->get_blob( $sha );
 			$encoded = preg_replace( '/\s+/', '', (string) ( $blob['content'] ?? '' ) );
-			if ( ! is_string( $encoded ) ) {
-				$encoded = '';
-			}
-			$content = base64_decode( $encoded, true );
 		}
+		$content = is_string( $encoded ) ? base64_decode( $encoded, true ) : false;
 		if ( false === $content ) {
-			throw new RuntimeException( 'GitHub returned invalid base64 file content.' );
+			throw new BridgeException( 'ejb_github_invalid_response', 'GitHub returned invalid file content.', 502 );
 		}
 
 		return [
@@ -93,7 +87,7 @@ final class Client {
 		$response = $this->request( 'PUT', $route, $body );
 		$new_sha  = $response['content']['sha'] ?? '';
 		if ( ! is_string( $new_sha ) || '' === $new_sha ) {
-			throw new RuntimeException( 'GitHub did not return the updated file SHA.' );
+			throw new BridgeException( 'ejb_github_invalid_response', 'GitHub did not return the updated file fingerprint.', 502 );
 		}
 		return [ 'sha' => $new_sha ];
 	}
@@ -103,7 +97,7 @@ final class Client {
 		$route = '/repos/' . rawurlencode( $owner ) . '/' . rawurlencode( $repo ) . '/git/blobs/' . rawurlencode( $sha );
 		$blob = $this->request( 'GET', $route );
 		if ( 'base64' !== ( $blob['encoding'] ?? '' ) || ! isset( $blob['content'] ) ) {
-			throw new RuntimeException( 'GitHub returned an unexpected blob response.' );
+			throw new BridgeException( 'ejb_github_invalid_response', 'GitHub returned an unexpected blob response.', 502 );
 		}
 		return $blob;
 	}
@@ -122,10 +116,10 @@ final class Client {
 			'redirection'         => 0,
 			'limit_response_size' => 8_000_000,
 			'headers'             => [
-				'Accept'                 => $accept,
-				'Authorization'          => 'Bearer ' . $this->auth->access_token(),
-				'X-GitHub-Api-Version'   => self::API_VERSION,
-				'User-Agent'             => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
+				'Accept'               => $accept,
+				'Authorization'        => 'Bearer ' . $this->auth->access_token(),
+				'X-GitHub-Api-Version' => self::API_VERSION,
+				'User-Agent'           => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
 			],
 		];
 		if ( null !== $json ) {
@@ -139,24 +133,40 @@ final class Client {
 
 		$response = wp_safe_remote_request( $url, $args );
 		if ( is_wp_error( $response ) ) {
-			throw new RuntimeException( 'GitHub request failed: ' . esc_html( $response->get_error_message() ) );
+			throw new BridgeException( 'ejb_github_unavailable', 'GitHub could not be reached. Try again.', 503 );
 		}
 
 		$status = wp_remote_retrieve_response_code( $response );
 		$this->capture_rate_limit( $response, $status );
 		$body = wp_remote_retrieve_body( $response );
 		$data = '' === $body ? [] : json_decode( $body, true );
+
 		if ( in_array( $status, $allowed_statuses, true ) ) {
 			return is_array( $data ) ? [ '_status' => $status ] + $data : [ '_status' => $status ];
 		}
-		if ( $status < 200 || $status >= 300 ) {
-			$message = is_array( $data ) && is_string( $data['message'] ?? null ) ? $data['message'] : 'GitHub API error.';
-			throw new RuntimeException( esc_html( sprintf( 'GitHub returned HTTP %d: %s', $status, $message ) ) );
+		if ( $status >= 200 && $status < 300 ) {
+			if ( ! is_array( $data ) ) {
+				throw new BridgeException( 'ejb_github_invalid_response', 'GitHub returned malformed JSON.', 502 );
+			}
+			return $data;
 		}
-		if ( ! is_array( $data ) ) {
-			throw new RuntimeException( 'GitHub returned malformed JSON.' );
+
+		if ( 429 === $status || ( 403 === $status && '0' === (string) wp_remote_retrieve_header( $response, 'x-ratelimit-remaining' ) ) ) {
+			throw new BridgeException( 'ejb_github_rate_limited', 'GitHub rate limiting is active. Try again after the cooldown.', 429 );
 		}
-		return $data;
+		if ( in_array( $status, [ 409, 422 ], true ) ) {
+			throw new BridgeException( 'ejb_github_conflict', 'GitHub changed before this operation completed. Check GitHub again.', 409 );
+		}
+		if ( in_array( $status, [ 401, 403 ], true ) ) {
+			throw new BridgeException( 'ejb_github_forbidden', 'GitHub authorization is invalid or does not have access to this repository.', 403 );
+		}
+		if ( 404 === $status ) {
+			throw new BridgeException( 'ejb_github_not_found', 'The configured GitHub repository or branch could not be found.', 404 );
+		}
+		if ( $status >= 500 ) {
+			throw new BridgeException( 'ejb_github_unavailable', 'GitHub is temporarily unavailable. Try again.', 503 );
+		}
+		throw new BridgeException( 'ejb_github_request_rejected', 'GitHub rejected the request.', 502 );
 	}
 
 	private function assert_rate_limit_window(): void {
@@ -167,13 +177,13 @@ final class Client {
 			}
 			return;
 		}
-		throw new RuntimeException( 'GitHub rate limiting is active. Try again after the current cooldown.' );
+		throw new BridgeException( 'ejb_github_rate_limited', 'GitHub rate limiting is active. Try again after the cooldown.', 429 );
 	}
 
 	private function capture_rate_limit( array $response, int $status ): void {
 		$retry_after = (int) wp_remote_retrieve_header( $response, 'retry-after' );
 		$remaining   = (string) wp_remote_retrieve_header( $response, 'x-ratelimit-remaining' );
-		$reset_at   = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
+		$reset_at    = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
 
 		if ( 429 !== $status && $retry_after < 1 && ! ( 403 === $status && '0' === $remaining ) ) {
 			return;
@@ -190,7 +200,7 @@ final class Client {
 		$owner = (string) Settings::get( 'repo_owner', '' );
 		$repo  = (string) Settings::get( 'repo_name', '' );
 		if ( '' === $owner || '' === $repo ) {
-			throw new RuntimeException( 'Configure the GitHub repository first.' );
+			throw new BridgeException( 'ejb_repository_missing', 'Configure the GitHub repository first.', 400 );
 		}
 		return [ $owner, $repo ];
 	}

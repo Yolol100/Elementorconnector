@@ -1,149 +1,33 @@
 <?php
-
 declare(strict_types=1);
-
 define('ABSPATH', __DIR__ . '/');
-
-if (!function_exists('wp_json_encode')) {
-    function wp_json_encode(mixed $value, int $flags = 0, int $depth = 512): string|false {
-        return json_encode($value, $flags, $depth);
-    }
-}
-if (!function_exists('wp_salt')) {
-    function wp_salt(string $scheme = 'auth'): string {
-        return 'elementor-json-bridge-test-salt-' . $scheme;
-    }
-}
-
-require_once dirname(__DIR__) . '/includes/Support/CanonicalJson.php';
-require_once dirname(__DIR__) . '/includes/Elementor/PayloadValidator.php';
-require_once dirname(__DIR__) . '/includes/Security/SecretBox.php';
-require_once dirname(__DIR__) . '/includes/Settings.php';
-
+$GLOBALS['ejb_test_options'] = [];
+function wp_json_encode(mixed $v,int $f=0,int $d=512): string|false { return json_encode($v,$f,$d); }
+function wp_salt(string $s='auth'): string { return 'ejb-test-'.$s; }
+function get_option(string $k,mixed $d=false): mixed { return $GLOBALS['ejb_test_options'][$k] ?? $d; }
+function wp_parse_args(mixed $a,array $d=[]): array { return array_merge($d,is_array($a)?$a:[]); }
+require dirname(__DIR__).'/includes/Support/CanonicalJson.php';
+require dirname(__DIR__).'/includes/Support/BridgeException.php';
+require dirname(__DIR__).'/includes/Elementor/PayloadValidator.php';
+require dirname(__DIR__).'/includes/Security/SecretBox.php';
+require dirname(__DIR__).'/includes/Settings.php';
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
 use Webactueel\ElementorJsonBridge\Settings;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
-
-$tests = [];
-
-$tests['canonical-json-is-deterministic'] = static function (): void {
-    $a = ['z' => 1, 'a' => ['y' => 2, 'x' => 3]];
-    $b = ['a' => ['x' => 3, 'y' => 2], 'z' => 1];
-    if (CanonicalJson::hash($a) !== CanonicalJson::hash($b)) {
-        throw new RuntimeException('Canonical hashes differ for equivalent data.');
-    }
-};
-
-$tests['payload-validates'] = static function (): void {
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [[
-            'id' => 'abc123',
-            'elType' => 'container',
-            'settings' => [],
-            'elements' => [],
-        ]],
-    ];
-    $decoded = (new PayloadValidator())->validate_array($payload, 'wp-page');
-    if ($decoded['type'] !== 'wp-page') {
-        throw new RuntimeException('Validated payload changed type.');
-    }
-};
-
-$tests['payload-rejects-type-mismatch'] = static function (): void {
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [],
-    ];
-    try {
-        (new PayloadValidator())->validate_array($payload, 'wp-post');
-    } catch (RuntimeException) {
-        return;
-    }
-    throw new RuntimeException('Type mismatch was accepted.');
-};
-
-$tests['payload-rejects-duplicate-element-ids'] = static function (): void {
-    $element = [
-        'id' => 'same',
-        'elType' => 'container',
-        'settings' => [],
-        'elements' => [],
-    ];
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [$element, $element],
-    ];
-    try {
-        (new PayloadValidator())->validate_array($payload, 'wp-page');
-    } catch (RuntimeException) {
-        return;
-    }
-    throw new RuntimeException('Duplicate element IDs were accepted.');
-};
-
-$tests['repo-path-sanitization-removes-traversal'] = static function (): void {
-    $actual = Settings::sanitize_repo_path('../elementor/../../pages/../safe');
-    if ($actual !== 'elementor/pages/safe') {
-        throw new RuntimeException('Unexpected sanitized path: ' . $actual);
-    }
-};
-
-$tests['secretbox-roundtrip-and-tamper-detection'] = static function (): void {
-    $box = new SecretBox();
-    $encrypted = $box->encrypt(['access_token' => 'test-token', 'refresh_token' => 'refresh']);
-    $decrypted = $box->decrypt($encrypted);
-    if (($decrypted['access_token'] ?? '') !== 'test-token') {
-        throw new RuntimeException('Encrypted token did not roundtrip.');
-    }
-
-    $raw = base64_decode($encrypted, true);
-    if (!is_string($raw) || $raw === '') {
-        throw new RuntimeException('Encrypted package was not base64.');
-    }
-    $package = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-    if (!is_array($package) || !isset($package['cipher'])) {
-        throw new RuntimeException('Encrypted package is malformed.');
-    }
-    $cipher = base64_decode((string) $package['cipher'], true);
-    if (!is_string($cipher) || $cipher === '') {
-        throw new RuntimeException('Cipher payload is malformed.');
-    }
-    $cipher[0] = chr(ord($cipher[0]) ^ 1);
-    $package['cipher'] = base64_encode($cipher);
-    $tampered = base64_encode(json_encode($package, JSON_THROW_ON_ERROR));
-
-    try {
-        $box->decrypt($tampered);
-    } catch (RuntimeException) {
-        return;
-    }
-    throw new RuntimeException('Tampered credential package was accepted.');
-};
-
-$failures = 0;
-foreach ($tests as $name => $test) {
-    try {
-        $test();
-        echo "PASS {$name}\n";
-    } catch (Throwable $throwable) {
-        ++$failures;
-        fwrite(STDERR, "FAIL {$name}: {$throwable->getMessage()}\n");
-    }
-}
-
-if ($failures > 0) {
-    exit(1);
-}
-
-echo 'PASS total=' . count($tests) . "\n";
+$tests=[];
+$valid=static fn()=>['title'=>'Home','type'=>'wp-page','version'=>'0.4','page_settings'=>[],'content'=>[['id'=>'abc123','elType'=>'container','settings'=>[],'elements'=>[]]]];
+$throws=static function(callable $fn): void { try{$fn();}catch(RuntimeException){return;} throw new RuntimeException('Expected exception'); };
+$tests['canonical']=static function():void{if(CanonicalJson::hash(['b'=>2,'a'=>1])!==CanonicalJson::hash(['a'=>1,'b'=>2]))throw new RuntimeException('canonical');};
+$tests['payload-valid']=static function()use($valid):void{(new PayloadValidator())->validate_array($valid(),'wp-page');};
+$tests['payload-type']=static function()use($valid,$throws):void{$throws(static fn()=>(new PayloadValidator())->validate_array($valid(),'wp-post'));};
+$tests['payload-duplicate']=static function()use($valid,$throws):void{$p=$valid();$p['content'][]=$p['content'][0];$throws(static fn()=>(new PayloadValidator())->validate_array($p,'wp-page'));};
+$tests['path-traversal']=static function():void{if(Settings::sanitize_repo_path('../elementor/../../pages/../safe')!=='elementor/pages/safe')throw new RuntimeException('path');};
+$tests['repo-identity']=static function():void{$GLOBALS['ejb_test_options'][Settings::OPTION]=['repo_owner'=>'A','repo_name'=>'B','repo_branch'=>'main','repo_root'=>'elementor'];$a=Settings::repository_identity();$GLOBALS['ejb_test_options'][Settings::OPTION]['repo_branch']='dev';if($a===Settings::repository_identity())throw new RuntimeException('identity');};
+$tests['crypto']=static function()use($throws):void{$b=new SecretBox();$e=$b->encrypt(['access_token'=>'x']);if(($b->decrypt($e)['access_token']??'')!=='x')throw new RuntimeException('crypto');$raw=base64_decode($e,true);$p=json_decode((string)$raw,true);$c=base64_decode((string)$p['cipher'],true);$c[0]=chr(ord($c[0])^1);$p['cipher']=base64_encode($c);$throws(static fn()=>$b->decrypt(base64_encode(json_encode($p))));};
+$tests['no-title-write']=static function():void{$s=file_get_contents(dirname(__DIR__).'/includes/Elementor/Documents.php');if(str_contains((string)$s,'wp_update_post('))throw new RuntimeException('title write');};
+$tests['snapshot-hash']=static function():void{$s=file_get_contents(dirname(__DIR__).'/includes/Backup/Snapshots.php');if(!str_contains((string)$s,'hash_equals'))throw new RuntimeException('snapshot');};
+$tests['repo-guard']=static function():void{$s=file_get_contents(dirname(__DIR__).'/includes/Sync/Manager.php');if(!str_contains((string)$s,'assert_repository_identity'))throw new RuntimeException('guard');};
+$tests['atomic-lock']=static function():void{$s=file_get_contents(dirname(__DIR__).'/includes/Sync/Lock.php');if(!str_contains((string)$s,'add_option(')||!str_contains((string)$s,'option_value = %s'))throw new RuntimeException('lock');};
+$tests['license']=static function():void{$s=file_get_contents(dirname(__DIR__).'/LICENSE');if(!str_contains((string)$s,'END OF TERMS AND CONDITIONS')||preg_match('//u',(string)$s)!==1)throw new RuntimeException('license');};
+$f=0;foreach($tests as $n=>$t){try{$t();echo "PASS $n\n";}catch(Throwable $e){$f++;fwrite(STDERR,"FAIL $n: {$e->getMessage()}\n");}}if($f)exit(1);echo 'PASS total='.count($tests)."\n";

@@ -9,7 +9,9 @@ use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Lifecycle\Hooks;
 use Webactueel\ElementorJsonBridge\Settings;
+use Webactueel\ElementorJsonBridge\Support\BridgeException;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
+use Webactueel\ElementorJsonBridge\Sync\State;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -116,12 +118,22 @@ final class RestController {
 		return $this->respond(
 			function () use ( $id, $action ): array {
 				if ( $id < 1 || ! get_post( $id ) || ! current_user_can( 'edit_post', $id ) ) {
-					throw new RuntimeException( 'You are not allowed to edit this document.' );
+					throw new BridgeException( 'ejb_document_forbidden', 'You are not allowed to edit this document.', 403 );
 				}
 				if ( ! $this->documents->is_elementor_document( $id ) ) {
-					throw new RuntimeException( 'This is not an editable Elementor document.' );
+					throw new BridgeException( 'ejb_document_invalid', 'This is not an editable Elementor document.', 400 );
 				}
-				$result = $action( $id );
+
+				try {
+					$result = $action( $id );
+				} catch ( BridgeException $exception ) {
+					throw $exception;
+				} catch ( RuntimeException $exception ) {
+					if ( State::CONFLICT === $this->sync->status( $id ) ) {
+						throw new BridgeException( 'ejb_sync_conflict', $exception->getMessage(), 409, $exception );
+					}
+					throw $exception;
+				}
 				return [ 'ok' => true ] + $result;
 			}
 		);
@@ -144,8 +156,12 @@ final class RestController {
 		try {
 			$result = $callback();
 			return new \WP_REST_Response( is_array( $result ) ? [ 'ok' => true ] + $result : [ 'ok' => true ] );
-		} catch ( Throwable $throwable ) {
-			return new \WP_Error( 'ejb_error', $throwable->getMessage(), [ 'status' => 400 ] );
+		} catch ( BridgeException $exception ) {
+			return new \WP_Error( $exception->error_code(), $exception->getMessage(), [ 'status' => $exception->http_status() ] );
+		} catch ( RuntimeException $exception ) {
+			return new \WP_Error( 'ejb_invalid_request', $exception->getMessage(), [ 'status' => 400 ] );
+		} catch ( Throwable ) {
+			return new \WP_Error( 'ejb_internal_error', 'Elementor JSON Bridge could not complete the request.', [ 'status' => 500 ] );
 		}
 	}
 }

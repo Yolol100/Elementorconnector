@@ -48,7 +48,7 @@ final class Settings {
 			$branch = 'main';
 		}
 
-		$previous = get_option( self::OPTION, [] );
+		$previous           = get_option( self::OPTION, [] );
 		$previous_client_id = is_array( $previous ) ? (string) ( $previous['github_client_id'] ?? '' ) : '';
 		if ( '' !== $previous_client_id && ! hash_equals( $previous_client_id, $client_id ) ) {
 			delete_option( self::AUTH_OPTION );
@@ -69,6 +69,20 @@ final class Settings {
 		return '' !== self::get( 'repo_owner', '' )
 			&& '' !== self::get( 'repo_name', '' )
 			&& '' !== self::get( 'repo_branch', '' );
+	}
+
+	public static function repository_identity(): string {
+		if ( ! self::repo_is_configured() ) {
+			return '';
+		}
+
+		$parts = [
+			strtolower( (string) self::get( 'repo_owner', '' ) ),
+			strtolower( (string) self::get( 'repo_name', '' ) ),
+			(string) self::get( 'repo_branch', 'main' ),
+			(string) self::get( 'repo_root', 'elementor' ),
+		];
+		return hash( 'sha256', implode( "\n", $parts ) );
 	}
 
 	public static function sanitize_repo_path( string $path ): string {

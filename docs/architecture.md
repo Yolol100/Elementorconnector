@@ -1,60 +1,53 @@
 # Architecture
 
-## Purpose
+## Trust boundaries
 
-Elementor JSON Bridge is a narrow synchronization boundary between WordPress/Elementor and GitHub. It deliberately does not contain an AI client. ChatGPT/Codex can work on the JSON through GitHub while WordPress retains the final validation/write authority.
+1. WordPress/Elementor is the live document authority.
+2. GitHub is a versioned review/edit transport, not an automatic production authority.
+3. The browser never receives GitHub access or refresh tokens.
+4. ChatGPT/Codex can work through GitHub without direct WordPress credentials.
 
-## Canonical responsibilities
+## Synchronization identity
 
-- **WordPress/Elementor**: live document state and final save authority.
-- **Plugin**: export/import boundary, auth, validation, conflict detection, snapshots, rollback and verification.
-- **Private GitHub content repo**: reviewable/versioned JSON transport and history.
-- **ChatGPT/Codex**: optional reviewed editor of repository JSON; never trusted as runtime proof.
+A trusted base consists of:
 
-## State model
+- live canonical SHA-256;
+- GitHub blob SHA;
+- stable GitHub file path;
+- SHA-256 identity of repository owner + repository + branch + JSON root.
 
-```text
-clean
-local_dirty
-remote_pending
-conflict
-applying
-verified
-error
-```
+Changing repository settings invalidates that base. The operator must explicitly reset it before establishing a new one.
 
-`attempted`, `applied` and `verified` are not interchangeable. A write reaches `verified` only after Elementor readback matches the expected canonical fingerprint.
+## States
 
-## Safe remote apply
+- `clean`: local and trusted remote base match;
+- `local_dirty`: live Elementor differs or no trusted remote exists;
+- `remote_pending`: checked remote differs while local still equals the base;
+- `conflict`: local/remote/repository identity violates the trusted base;
+- `applying`: a guarded remote apply is executing;
+- `verified`: apply completed and exact readback verification passed;
+- `error`: the operation failed outside a safe conflict state.
 
-1. Administrator requests a fresh remote check.
-2. Plugin binds the pending change to the exact current GitHub blob SHA.
-3. Plugin re-reads current local state and checks the remembered base fingerprint.
-4. Any local/remote divergence becomes `conflict`; no overwrite occurs.
-5. Plugin creates a private local snapshot.
-6. JSON passes structural validation and live document-type validation.
-7. Plugin saves through Elementor `Document::save()`.
-8. Plugin reads the document back and canonicalizes it.
-9. Expected and actual fingerprints must match.
-10. On mismatch/error, restore the snapshot and mark the operation failed.
+## Apply transaction
 
-## Safe export
+1. acquire per-document lock;
+2. require enabled sync and private repository;
+3. verify repository identity;
+4. fetch remote and re-check pending GitHub SHA;
+5. re-read live Elementor and verify base hash;
+6. validate remote JSON and replace informational remote title with current live title;
+7. verify pending canonical hash;
+8. create integrity-fingerprinted local snapshot;
+9. save through Elementor `Document::save()`;
+10. re-read and compare canonical SHA-256;
+11. on failure restore snapshot and verify rollback;
+12. on success update trusted base and mark `verified`;
+13. release lock.
 
-- New remote file: create only when no unknown remote history exists.
-- Existing remote file: update only with the exact GitHub blob SHA learned from the trusted base.
-- Timeout/uncertain response: reconcile by reading the remote content before retrying.
-- Rate limiting: persist a cooldown and avoid request storms.
+## Concurrency
 
-## Backups
+Locks use WordPress options because `option_name` is unique. Acquisition uses `add_option()`; stale recovery uses a conditional compare-and-delete against the exact old option value so one request cannot delete a lock newly acquired by another request.
 
-Snapshots are private WordPress records. Git history is additional version history, not the sole backup. The plugin retains a bounded number of snapshots per document.
+## External service
 
-## Non-goals for v0.1.x
-
-- automatic remote apply;
-- V3/V4 migration;
-- creating or remapping site IDs;
-- proving third-party widget/add-on availability;
-- production deployment automation;
-- OpenAI/MCP integration inside WordPress;
-- generic Git hosting providers.
+Only fixed `github.com` Device Flow/token endpoints and `api.github.com` repository endpoints are used. HTTP redirects are disabled for authenticated provider calls. GitHub files remain untrusted until validated.
