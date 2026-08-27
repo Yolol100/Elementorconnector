@@ -40,17 +40,17 @@ jobs:
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
           php tests/run.php
 
-      - name: Validate Composer metadata
-        run: composer validate --strict --no-check-lock
+      - name: Validate locked Composer metadata
+        run: composer validate --strict
 
-      - name: Install development tools
+      - name: Install locked development tools
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Coding standards and PHP compatibility
         run: composer phpcs
 
       - name: Dependency audit
-        run: composer audit
+        run: composer audit --locked
 
       - name: Build release package twice
         if: matrix.php == '8.3'
@@ -68,7 +68,6 @@ jobs:
           path: |
             dist/elementor-json-bridge.zip
             dist/elementor-json-bridge.zip.sha256
-            composer.lock
           if-no-files-found: error
           retention-days: 14
 
