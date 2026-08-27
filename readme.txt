@@ -2,7 +2,7 @@
 Contributors: webactueel
 Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
-Requires PHP: 8.1
+Requires PHP: 8.3
 Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -78,7 +78,6 @@ Protected admin actions use authenticated WordPress REST requests with a REST no
 GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. If neither encryption primitive exists, GitHub credentials are not stored.
 
 The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does not expose an inbound public webhook.
-
 
 == External service ==
 
