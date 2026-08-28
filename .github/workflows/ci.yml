@@ -92,3 +92,11 @@ jobs:
             security
             performance
             accessibility
+          # RuntimeException strings are internal error data, not HTML output. The admin/REST
+          # presentation boundary escapes them before rendering. The two meta queries are
+          # intentional and bounded: max 200 Elementor documents in the admin list and a
+          # 20-document polling batch on plugin-owned enable metadata.
+          ignore-codes: |
+            WordPress.Security.EscapeOutput.ExceptionNotEscaped
+            WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+            WordPress.DB.SlowDBQuery.slow_db_query_meta_value
