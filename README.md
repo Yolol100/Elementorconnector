@@ -12,7 +12,8 @@ A conservative WordPress plugin that synchronizes selected Elementor documents w
 - GitHub authentication uses Device Flow. Never commit access tokens, refresh tokens, client secrets or site credentials.
 - Real Elementor JSON must stay in private GitHub storage. A separate private content repo is simplest; single-repository mode is supported only when this repository is private and site JSON uses the dedicated `site-sync` branch.
 - Existing remote files with unknown history are never overwritten.
-- Automatic remote apply is opt-in in v0.2.0 and disabled by default.
+- Automatic remote apply is opt-in in v0.2.x and disabled by default.
+- Automatic apply records the administrator who enabled it and rechecks that actor's bridge capability plus `edit_post` before each background write.
 - Both manual and automatic apply recheck the remote SHA and local base before any Elementor write.
 - Every apply creates a local snapshot first.
 - Incoming JSON is structurally validated before save.
@@ -30,6 +31,7 @@ assets/                       Admin CSS/JS
 includes/                     Plugin application code
 scripts/build-zip.sh          Reproducible runtime package builder
 tests/run.php                 Zero-dependency regression/security tests
+tests/background-authorization.php  Cron/background authorization regression test
 docs/architecture.md          Runtime boundaries and state model
 AGENTS.md                     Rules for AI/code agents working in this repo
 SECURITY.md                   Security reporting and secret/data policy
@@ -45,6 +47,7 @@ Minimum zero-dependency checks:
 ```bash
 find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 php tests/run.php
+php tests/background-authorization.php
 bash scripts/build-zip.sh
 ```
 
@@ -82,10 +85,10 @@ Do not synchronize real site JSON while the repository is public. The plugin rej
 
 ## Automatic apply
 
-Version 0.2.0 can apply fresh remote changes without an administrator click. The setting is off by default. When enabled, request-driven WP-Cron checks about once per minute. Before an automatic write, the plugin checks GitHub again and then uses the same conflict, snapshot, validation, readback and rollback sequence as a manual apply.
+Version 0.2.1 can apply fresh remote changes without an administrator click. The setting is off by default. When an administrator enables it, that actor is recorded. Before each background write, the plugin verifies that the actor still has the bridge capability and `edit_post` for the target, temporarily activates that WordPress user context, checks GitHub again, and then uses the same conflict, snapshot, validation, readback and rollback sequence as a manual apply. The previous WordPress user context is restored immediately afterwards.
 
 WP-Cron is request-driven, so one minute is a target cadence rather than a hard real-time guarantee.
 
 ## Status
 
-Version `0.2.0` adds opt-in automatic apply and private single-repository support. Source/static/controlled checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before a production-ready claim.
+Version `0.2.1` fixes and permanently tests background authorization for automatic apply. Source/static/controlled checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before a production-ready claim.
