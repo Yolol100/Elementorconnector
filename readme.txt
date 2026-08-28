@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,7 +49,7 @@ The private repository itself is not created by this plugin. Create it first in 
 3. Edit the JSON in GitHub with ChatGPT, Codex, or another reviewed workflow.
 4. The plugin checks enabled documents about once per minute through WP-Cron. WP-Cron is request-driven, so this is not an exact clock.
 5. If Automatic apply is disabled, review a remote_pending change and click Apply GitHub.
-6. If Automatic apply is enabled, a pending change is checked again and then applied automatically only when the live document still matches the trusted base and the GitHub SHA/fingerprint are fresh.
+6. If Automatic apply is enabled, a pending change is checked again and then applied automatically only when the live document still matches the trusted base, the GitHub SHA/fingerprint are fresh, and the administrator who enabled Automatic apply still has the bridge capability plus `edit_post` for that document.
 7. Every apply creates a snapshot, validates the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
 8. If verification fails, the snapshot is restored.
 
@@ -88,13 +88,13 @@ The plugin's private-repository guard rejects a public repository. Do not synchr
 
 Automatic apply is disabled by default and must be enabled in Tools -> Elementor JSON Bridge.
 
-When enabled, only documents that were explicitly enabled for synchronization are eligible. Before every automatic apply, the plugin performs a fresh GitHub check. The existing remote SHA, local base fingerprint, pending content fingerprint, structural validation, snapshot, Elementor save, readback verification and rollback gates remain in force. A conflict, malformed payload, changed SHA, changed local document or failed readback prevents a successful automatic apply.
+When enabled, the plugin records the WordPress administrator who enabled the setting. Only enabled documents for which that actor still has the bridge capability and `edit_post` are eligible. The cron task temporarily restores that authorized WordPress user context for the fresh remote check and Elementor write, and restores the previous user immediately afterwards. Before every automatic apply, the plugin performs a fresh GitHub check. The existing remote SHA, local base fingerprint, pending content fingerprint, structural validation, snapshot, Elementor save, readback verification and rollback gates remain in force. A conflict, malformed payload, changed SHA, changed local document, revoked permission or failed readback prevents a successful automatic apply.
 
 The plugin does not use inbound webhooks. The target poll cadence is about one minute, but WP-Cron runs when WordPress receives requests unless the host provides a real cron trigger.
 
 == Security ==
 
-Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions additionally require `edit_post` for that document. Automatic apply runs without an interactive user and is limited to documents that an authorized administrator previously enabled for synchronization; it still performs fresh conflict, validation, snapshot, readback and rollback checks before a change can become verified.
+Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions additionally require `edit_post` for that document. Automatic apply revalidates the recorded administrator's bridge capability and `edit_post` permission for each target before activating that user's context for the background write.
 
 Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization.
 
@@ -137,6 +137,10 @@ Version 0.2.x remains intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.2.1 =
+* Fix automatic cron apply by running it under the administrator who explicitly enabled Automatic apply, while rechecking that user's bridge capability and `edit_post` permission for each document.
+* Restore the previous WordPress user immediately after every background attempt so cron does not leak authorization context to later hooks.
 
 = 0.2.0 =
 * Add opt-in automatic application of fresh, conflict-free GitHub changes using the existing snapshot, validation, readback and rollback gates.
