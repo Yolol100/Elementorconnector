@@ -2,8 +2,9 @@
 Contributors: webactueel
 Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,7 +25,7 @@ Core safety rules:
 * Incoming JSON is structurally validated before save.
 * The saved document is read back and fingerprinted after save.
 * A failed roundtrip triggers automatic rollback to the local snapshot.
-* Remote changes are never auto-applied in version 0.1.0; an administrator must click Apply GitHub.
+* Remote changes are never auto-applied in version 0.1.x; an administrator must click Apply GitHub.
 * GitHub tokens are never exposed to browser JavaScript or stored in logs.
 
 == GitHub App setup ==
@@ -79,7 +80,6 @@ GitHub credentials are encrypted with libsodium Secretbox where available or AES
 
 The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does not expose an inbound public webhook.
 
-
 == External service ==
 
 Elementor JSON Bridge uses GitHub as an external storage and version-control service only after an administrator explicitly configures and connects it.
@@ -101,7 +101,7 @@ GitHub commit history is useful version history but is not treated as the only b
 
 == Limitations ==
 
-Version 0.1.0 is intentionally conservative:
+Version 0.1.x is intentionally conservative:
 
 * Remote JSON is never applied automatically by cron.
 * The plugin performs structural validation and exact post-save roundtrip verification, but it cannot prove every widget, add-on, dynamic tag, Theme Builder condition, form action, or site-specific dependency is valid.
@@ -113,6 +113,12 @@ Version 0.1.0 is intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.1.1 =
+* Keep structural validation independent from WordPress HTML escaping so regression checks can execute outside a loaded WordPress request.
+* Expand negative validator coverage for malformed JSON, unknown fields, duplicate IDs, and invalid widget payloads.
+* Make CI verify two byte-identical release builds and publish the exact tested ZIP artifact.
+* Run Plugin Check against the private-distribution quality categories instead of WordPress.org-only repository policy.
 
 = 0.1.0 =
 * Initial release.
