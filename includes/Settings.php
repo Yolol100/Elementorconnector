@@ -16,6 +16,7 @@ final class Settings {
 		'repo_root'                => 'elementor',
 		'auto_export'              => 1,
 		'auto_apply'               => 0,
+		'auto_apply_actor'         => 0,
 		'delete_data_on_uninstall' => 0,
 	];
 
@@ -55,6 +56,13 @@ final class Settings {
 			delete_option( self::AUTH_OPTION );
 		}
 
+		$auto_apply       = empty( $input['auto_apply'] ) ? 0 : 1;
+		$previous_actor   = is_array( $previous ) ? (int) ( $previous['auto_apply_actor'] ?? 0 ) : 0;
+		$auto_apply_actor = $auto_apply ? get_current_user_id() : 0;
+		if ( $auto_apply && $auto_apply_actor < 1 ) {
+			$auto_apply_actor = $previous_actor;
+		}
+
 		return [
 			'github_client_id'         => $client_id,
 			'repo_owner'               => $owner,
@@ -62,7 +70,8 @@ final class Settings {
 			'repo_branch'              => $branch,
 			'repo_root'                => '' !== $root ? $root : 'elementor',
 			'auto_export'              => empty( $input['auto_export'] ) ? 0 : 1,
-			'auto_apply'               => empty( $input['auto_apply'] ) ? 0 : 1,
+			'auto_apply'               => $auto_apply,
+			'auto_apply_actor'         => $auto_apply_actor,
 			'delete_data_on_uninstall' => empty( $input['delete_data_on_uninstall'] ) ? 0 : 1,
 		];
 	}
