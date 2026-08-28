@@ -16,9 +16,12 @@ done
 
 find "$STAGE" -type f -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
 
+# Normalize runtime file timestamps so identical source produces identical ZIP bytes.
+find "$STAGE" -type f -exec touch -t 202001010000.00 {} +
+
 (
     cd "$DIST"
-    zip -qr "$ZIP" "$SLUG"
+    find "$SLUG" -type f -print | LC_ALL=C sort | zip -X -q "$ZIP" -@
 )
 
 if unzip -Z1 "$ZIP" | grep -Eq '(^|/)(tests|vendor|\.git|\.github|AGENTS\.md|composer\.json|phpcs\.xml\.dist)($|/)'; then

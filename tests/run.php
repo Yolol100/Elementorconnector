@@ -27,6 +27,28 @@ use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 $tests = [];
 
+$valid_payload = static fn (): array => [
+    'title' => 'Home',
+    'type' => 'wp-page',
+    'version' => '0.4',
+    'page_settings' => [],
+    'content' => [[
+        'id' => 'abc123',
+        'elType' => 'container',
+        'settings' => [],
+        'elements' => [],
+    ]],
+];
+
+$expect_runtime_exception = static function (callable $callback, string $message): void {
+    try {
+        $callback();
+    } catch (RuntimeException) {
+        return;
+    }
+    throw new RuntimeException($message);
+};
+
 $tests['canonical-json-is-deterministic'] = static function (): void {
     $a = ['z' => 1, 'a' => ['y' => 2, 'x' => 3]];
     $b = ['a' => ['x' => 3, 'y' => 2], 'z' => 1];
@@ -35,61 +57,52 @@ $tests['canonical-json-is-deterministic'] = static function (): void {
     }
 };
 
-$tests['payload-validates'] = static function (): void {
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [[
-            'id' => 'abc123',
-            'elType' => 'container',
-            'settings' => [],
-            'elements' => [],
-        ]],
-    ];
-    $decoded = (new PayloadValidator())->validate_array($payload, 'wp-page');
+$tests['payload-validates'] = static function () use ($valid_payload): void {
+    $decoded = (new PayloadValidator())->validate_array($valid_payload(), 'wp-page');
     if ($decoded['type'] !== 'wp-page') {
         throw new RuntimeException('Validated payload changed type.');
     }
 };
 
-$tests['payload-rejects-type-mismatch'] = static function (): void {
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [],
-    ];
-    try {
-        (new PayloadValidator())->validate_array($payload, 'wp-post');
-    } catch (RuntimeException) {
-        return;
-    }
-    throw new RuntimeException('Type mismatch was accepted.');
+$tests['payload-rejects-type-mismatch'] = static function () use ($valid_payload, $expect_runtime_exception): void {
+    $expect_runtime_exception(
+        static fn () => (new PayloadValidator())->validate_array($valid_payload(), 'wp-post'),
+        'Type mismatch was accepted.'
+    );
 };
 
-$tests['payload-rejects-duplicate-element-ids'] = static function (): void {
-    $element = [
-        'id' => 'same',
-        'elType' => 'container',
-        'settings' => [],
-        'elements' => [],
-    ];
-    $payload = [
-        'title' => 'Home',
-        'type' => 'wp-page',
-        'version' => '0.4',
-        'page_settings' => [],
-        'content' => [$element, $element],
-    ];
-    try {
-        (new PayloadValidator())->validate_array($payload, 'wp-page');
-    } catch (RuntimeException) {
-        return;
-    }
-    throw new RuntimeException('Duplicate element IDs were accepted.');
+$tests['payload-rejects-duplicate-element-ids'] = static function () use ($valid_payload, $expect_runtime_exception): void {
+    $payload = $valid_payload();
+    $payload['content'][] = $payload['content'][0];
+    $expect_runtime_exception(
+        static fn () => (new PayloadValidator())->validate_array($payload, 'wp-page'),
+        'Duplicate element IDs were accepted.'
+    );
+};
+
+$tests['payload-rejects-unknown-root-field'] = static function () use ($valid_payload, $expect_runtime_exception): void {
+    $payload = $valid_payload();
+    $payload['unexpected'] = true;
+    $expect_runtime_exception(
+        static fn () => (new PayloadValidator())->validate_array($payload, 'wp-page'),
+        'Unknown root field was accepted.'
+    );
+};
+
+$tests['payload-rejects-widget-without-widget-type'] = static function () use ($valid_payload, $expect_runtime_exception): void {
+    $payload = $valid_payload();
+    $payload['content'][0]['elType'] = 'widget';
+    $expect_runtime_exception(
+        static fn () => (new PayloadValidator())->validate_array($payload, 'wp-page'),
+        'Widget without widgetType was accepted.'
+    );
+};
+
+$tests['payload-rejects-malformed-json-without-wordpress-runtime'] = static function () use ($expect_runtime_exception): void {
+    $expect_runtime_exception(
+        static fn () => (new PayloadValidator())->decode('{broken'),
+        'Malformed JSON was accepted.'
+    );
 };
 
 $tests['repo-path-sanitization-removes-traversal'] = static function (): void {

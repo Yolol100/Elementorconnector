@@ -28,7 +28,7 @@ final class PayloadValidator {
 		try {
 			$data = json_decode( $json, true, 512, JSON_THROW_ON_ERROR );
 		} catch ( JsonException $exception ) {
-			throw new RuntimeException( 'Invalid JSON: ' . esc_html( $exception->getMessage() ) );
+			throw new RuntimeException( 'Invalid JSON: ' . $exception->getMessage() );
 		}
 
 		if ( ! is_array( $data ) || array_is_list( $data ) ) {
@@ -39,10 +39,10 @@ final class PayloadValidator {
 		$unknown  = array_diff( array_keys( $data ), $required );
 		$missing  = array_diff( $required, array_keys( $data ) );
 		if ( $missing ) {
-			throw new RuntimeException( 'Missing JSON fields: ' . esc_html( implode( ', ', $missing ) ) . '.' );
+			throw new RuntimeException( 'Missing JSON fields: ' . implode( ', ', $missing ) . '.' );
 		}
 		if ( $unknown ) {
-			throw new RuntimeException( 'Unknown top-level JSON fields: ' . esc_html( implode( ', ', $unknown ) ) . '.' );
+			throw new RuntimeException( 'Unknown top-level JSON fields: ' . implode( ', ', $unknown ) . '.' );
 		}
 
 		if ( ! is_string( $data['title'] ) || strlen( $data['title'] ) > 1000 ) {
@@ -100,7 +100,7 @@ final class PayloadValidator {
 				throw new RuntimeException( 'An Elementor element has an invalid ID.' );
 			}
 			if ( isset( $this->ids[ $id ] ) ) {
-				throw new RuntimeException( 'Duplicate Elementor element ID: ' . esc_html( $id ) . '.' );
+				throw new RuntimeException( 'Duplicate Elementor element ID: ' . $id . '.' );
 			}
 			$this->ids[ $id ] = true;
 
