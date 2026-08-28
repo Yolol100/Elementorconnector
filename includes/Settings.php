@@ -15,6 +15,7 @@ final class Settings {
 		'repo_branch'              => 'main',
 		'repo_root'                => 'elementor',
 		'auto_export'              => 1,
+		'auto_apply'               => 0,
 		'delete_data_on_uninstall' => 0,
 	];
 
@@ -61,6 +62,7 @@ final class Settings {
 			'repo_branch'              => $branch,
 			'repo_root'                => '' !== $root ? $root : 'elementor',
 			'auto_export'              => empty( $input['auto_export'] ) ? 0 : 1,
+			'auto_apply'               => empty( $input['auto_apply'] ) ? 0 : 1,
 			'delete_data_on_uninstall' => empty( $input['delete_data_on_uninstall'] ) ? 0 : 1,
 		];
 	}

@@ -132,6 +132,10 @@ final class AdminPage {
 							<td><label><input type="checkbox" name="<?php echo esc_attr( Settings::OPTION ); ?>[auto_export]" value="1" <?php checked( 1, (int) $settings['auto_export'] ); ?>> <?php echo esc_html__( 'Push enabled documents to GitHub after a normal WordPress or Elementor save.', 'elementor-json-bridge' ); ?></label></td>
 						</tr>
 						<tr>
+							<th scope="row"><?php echo esc_html__( 'Automatic apply', 'elementor-json-bridge' ); ?></th>
+							<td><label><input type="checkbox" name="<?php echo esc_attr( Settings::OPTION ); ?>[auto_apply]" value="1" <?php checked( 1, (int) $settings['auto_apply'] ); ?>> <?php echo esc_html__( 'Automatically apply fresh GitHub changes for enabled documents after validation and conflict checks.', 'elementor-json-bridge' ); ?></label><p class="description"><?php echo esc_html__( 'Off by default. Every automatic apply still creates a snapshot, verifies Elementor readback, and rolls back on failure.', 'elementor-json-bridge' ); ?></p></td>
+						</tr>
+						<tr>
 							<th scope="row"><?php echo esc_html__( 'Uninstall cleanup', 'elementor-json-bridge' ); ?></th>
 							<td><label><input type="checkbox" name="<?php echo esc_attr( Settings::OPTION ); ?>[delete_data_on_uninstall]" value="1" <?php checked( 1, (int) $settings['delete_data_on_uninstall'] ); ?>> <?php echo esc_html__( 'Delete snapshots and sync metadata when the plugin is uninstalled.', 'elementor-json-bridge' ); ?></label></td>
 						</tr>
@@ -143,7 +147,7 @@ final class AdminPage {
 
 			<section class="ejb-card">
 				<h2><?php echo esc_html__( '3. Elementor documents', 'elementor-json-bridge' ); ?></h2>
-				<p><?php echo esc_html__( 'Remote changes are detected automatically, but applying a GitHub change always requires an administrator click in version 0.1.x.', 'elementor-json-bridge' ); ?></p>
+				<p><?php echo esc_html__( 'GitHub is checked through request-driven WP-Cron about once per minute. With Automatic apply enabled, fresh conflict-free changes are applied automatically; otherwise Apply GitHub remains manual.', 'elementor-json-bridge' ); ?></p>
 				<?php $this->document_table(); ?>
 			</section>
 		</div>

@@ -8,7 +8,7 @@ Elementor JSON Bridge is a narrow synchronization boundary between WordPress/Ele
 
 - **WordPress/Elementor**: live document state and final save authority.
 - **Plugin**: export/import boundary, auth, validation, conflict detection, snapshots, rollback and verification.
-- **Private GitHub content repo**: reviewable/versioned JSON transport and history.
+- **Private GitHub content repo or private site-data branch**: reviewable/versioned JSON transport and history.
 - **ChatGPT/Codex**: optional reviewed editor of repository JSON; never trusted as runtime proof.
 
 ## State model
@@ -27,7 +27,7 @@ error
 
 ## Safe remote apply
 
-1. Administrator requests a fresh remote check.
+1. A manual administrator action or the opt-in automatic worker obtains a fresh remote check.
 2. Plugin binds the pending change to the exact current GitHub blob SHA.
 3. Plugin re-reads current local state and checks the remembered base fingerprint.
 4. Any local/remote divergence becomes `conflict`; no overwrite occurs.
@@ -38,6 +38,10 @@ error
 9. Expected and actual fingerprints must match.
 10. On mismatch/error, restore the snapshot and mark the operation failed.
 
+## Automatic apply
+
+Automatic apply is disabled by default. When enabled, request-driven WP-Cron checks enabled documents about once per minute. A pending file is checked again immediately before `apply_remote()` runs. The existing SHA/base-fingerprint conflict gates, snapshot, validation, Elementor save, readback verification and rollback remain authoritative. No inbound webhook is required.
+
 ## Safe export
 
 - New remote file: create only when no unknown remote history exists.
@@ -45,16 +49,20 @@ error
 - Timeout/uncertain response: reconcile by reading the remote content before retrying.
 - Rate limiting: persist a cooldown and avoid request storms.
 
+## Single-repository mode
+
+The source repository and site JSON may share one GitHub repository only when that repository is private. Keep plugin source on `main`, use a dedicated `site-sync` branch for live JSON, and use a root such as `site-data/elementor`. The plugin's private-repository guard rejects a public repository. The release builder copies an explicit runtime allowlist, so `site-data/` is not shipped in the plugin ZIP.
+
 ## Backups
 
 Snapshots are private WordPress records. Git history is additional version history, not the sole backup. The plugin retains a bounded number of snapshots per document.
 
-## Non-goals for v0.1.x
+## Non-goals for v0.2.x
 
-- automatic remote apply;
 - V3/V4 migration;
 - creating or remapping site IDs;
 - proving third-party widget/add-on availability;
 - production deployment automation;
 - OpenAI/MCP integration inside WordPress;
-- generic Git hosting providers.
+- generic Git hosting providers;
+- inbound public webhooks.
