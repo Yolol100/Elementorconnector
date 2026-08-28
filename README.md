@@ -12,7 +12,7 @@ A conservative WordPress plugin that synchronizes selected Elementor documents w
 - GitHub authentication uses Device Flow. Never commit access tokens, refresh tokens, client secrets or site credentials.
 - Real Elementor JSON belongs in a separate **private** content repository. This source repository must stay free of client/site content.
 - Existing remote files with unknown history are never overwritten.
-- Every remote apply requires an administrator action in v0.1.0.
+- Every remote apply requires an administrator action in v0.1.x.
 - Every apply creates a local snapshot first.
 - Incoming JSON is structurally validated before save.
 - Synchronization uses local SHA-256 fingerprints plus GitHub blob SHAs to detect stale/conflicting state.
@@ -71,4 +71,4 @@ Never put those real files in this public source repo.
 
 ## Status
 
-Version `0.1.0` is intentionally conservative. Source/static checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before production use.
+Version `0.1.2` is intentionally conservative. Source/static checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before production use.
