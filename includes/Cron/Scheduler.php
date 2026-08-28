@@ -8,8 +8,9 @@ use Webactueel\ElementorJsonBridge\Sync\Manager;
 defined( 'ABSPATH' ) || exit;
 
 final class Scheduler {
-	private const POLL_HOOK = 'ejb_poll_remote';
-	private const INTERVAL  = 'ejb_ten_minutes';
+	private const POLL_HOOK             = 'ejb_poll_remote';
+	private const INTERVAL              = 'ejb_one_minute';
+	private const POLL_INTERVAL_SECONDS = 60;
 
 	public function __construct( private readonly Manager $manager ) {}
 
@@ -22,16 +23,21 @@ final class Scheduler {
 
 	public function schedules( array $schedules ): array {
 		$schedules[ self::INTERVAL ] = [
-			'interval' => 600,
-			'display'  => 'Every 10 minutes',
+			'interval' => self::POLL_INTERVAL_SECONDS,
+			'display'  => 'Every minute',
 		];
 		return $schedules;
 	}
 
 	public function ensure_scheduled(): void {
-		if ( ! wp_next_scheduled( self::POLL_HOOK ) ) {
-			wp_schedule_event( time() + 120, self::INTERVAL, self::POLL_HOOK );
+		$event = wp_get_scheduled_event( self::POLL_HOOK );
+		if ( $event && self::INTERVAL === (string) $event->schedule ) {
+			return;
 		}
+		if ( $event ) {
+			wp_unschedule_hook( self::POLL_HOOK );
+		}
+		wp_schedule_event( time() + 30, self::INTERVAL, self::POLL_HOOK );
 	}
 
 	public function export_document( int $post_id ): void {

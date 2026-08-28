@@ -11,6 +11,7 @@ use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
+use Webactueel\ElementorJsonBridge\Sync\AutoApply;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 
@@ -36,6 +37,7 @@ final class Plugin {
 		( new AdminPage( $auth, $documents, $sync, $snapshots ) )->register();
 		( new RestController( $auth, $github, $documents, $sync ) )->register();
 		( new Scheduler( $sync ) )->register();
+		( new AutoApply( $sync ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 20, 3 );
 
 		if ( class_exists( '\\Elementor\\Plugin' ) ) {

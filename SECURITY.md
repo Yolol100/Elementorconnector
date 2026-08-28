@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security fixes currently target the latest `0.1.x` source until a newer release line exists.
+Security fixes currently target the latest `0.2.x` source until a newer release line exists.
 
 ## Report a vulnerability
 
@@ -14,11 +14,13 @@ Include the affected version, reproduction steps, impact and any safe proof need
 
 - GitHub Device Flow is used instead of personal access tokens entered in WordPress.
 - Access/refresh tokens are encrypted at rest and must never be logged or sent to the browser.
-- GitHub repository access should be limited to the single private JSON repository and `Contents: read/write` only.
-- WordPress state-changing actions require capability checks and nonces/authenticated REST requests.
-- Each Elementor document action also requires `edit_post` permission.
+- GitHub repository access should be limited to the configured private repository and `Contents: read/write` only. In single-repository mode, the source repository must be private and live Elementor JSON should use the dedicated `site-sync` branch.
+- WordPress state-changing admin actions require capability checks and nonces/authenticated REST requests.
+- Each manual Elementor document action additionally requires `edit_post` permission.
+- Automatic apply is disabled by default and is limited to documents explicitly enabled for synchronization.
+- Both manual and automatic apply perform a fresh remote/local conflict check before writing.
 - Incoming JSON is size/shape/depth/node/ID validated before it can reach Elementor.
 - Remote state is bound to both a GitHub blob SHA and a canonical local SHA-256 fingerprint.
-- A remote apply creates a local snapshot and verifies the saved document by readback; verification failure rolls back.
+- Every remote apply creates a local snapshot and verifies the saved document by readback; verification failure rolls back.
 - No public inbound webhook is exposed.
 - Production writes are staging-first.

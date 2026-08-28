@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.2
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,7 +25,8 @@ Core safety rules:
 * Incoming JSON is structurally validated before save.
 * The saved document is read back and fingerprinted after save.
 * A failed roundtrip triggers automatic rollback to the local snapshot.
-* Remote changes are never auto-applied in version 0.1.x; an administrator must click Apply GitHub.
+* Automatic remote apply is opt-in and disabled by default. When enabled, the plugin rechecks fresh GitHub/local state before applying.
+* Manual Apply GitHub remains available when automatic apply is disabled or a pending change needs review.
 * GitHub tokens are never exposed to browser JavaScript or stored in logs.
 
 == GitHub App setup ==
@@ -46,10 +47,11 @@ The private repository itself is not created by this plugin. Create it first in 
 1. Enable a document in Tools -> Elementor JSON Bridge.
 2. Click Export once to establish the trusted GitHub base.
 3. Edit the JSON in GitHub with ChatGPT, Codex, or another reviewed workflow.
-4. The plugin checks enabled documents for remote changes every ten minutes through WP-Cron. WP-Cron is request-driven, so this is not an exact clock.
-5. When the status is remote_pending, review and click Apply GitHub.
-6. The plugin creates a snapshot, validates the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
-7. If verification fails, the snapshot is restored.
+4. The plugin checks enabled documents about once per minute through WP-Cron. WP-Cron is request-driven, so this is not an exact clock.
+5. If Automatic apply is disabled, review a remote_pending change and click Apply GitHub.
+6. If Automatic apply is enabled, a pending change is checked again and then applied automatically only when the live document still matches the trusted base and the GitHub SHA/fingerprint are fresh.
+7. Every apply creates a snapshot, validates the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
+8. If verification fails, the snapshot is restored.
 
 Normal WordPress or Elementor saves can be exported automatically when Automatic export is enabled. An automatic export refuses to overwrite a GitHub file whose SHA no longer matches the known base.
 
@@ -69,6 +71,26 @@ Each file uses Elementor's documented document wrapper:
 The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. These bridge files are not promised as drop-in Template Library imports for live pages/posts; saved Elementor Library templates keep their own template document type.
 
 It does not convert V3 to V4, V4 to V3, invent site IDs, or rewrite dynamic references.
+
+== Single-repository mode ==
+
+A separate private content repository remains the simplest setup. If you prefer one GitHub repository for both plugin source and website JSON, the repository must be private first.
+
+Recommended single-repository layout:
+
+* Plugin source branch: `main`
+* Website JSON branch: `site-sync`
+* JSON folder: `site-data/elementor`
+
+The plugin's private-repository guard rejects a public repository. Do not synchronize real site JSON while the repository is public. Keeping live JSON on `site-sync` also separates normal website-content commits from source-code CI on `main`.
+
+== Automatic apply ==
+
+Automatic apply is disabled by default and must be enabled in Tools -> Elementor JSON Bridge.
+
+When enabled, only documents that were explicitly enabled for synchronization are eligible. Before every automatic apply, the plugin performs a fresh GitHub check. The existing remote SHA, local base fingerprint, pending content fingerprint, structural validation, snapshot, Elementor save, readback verification and rollback gates remain in force. A conflict, malformed payload, changed SHA, changed local document or failed readback prevents a successful automatic apply.
+
+The plugin does not use inbound webhooks. The target poll cadence is about one minute, but WP-Cron runs when WordPress receives requests unless the host provides a real cron trigger.
 
 == Security ==
 
@@ -101,18 +123,26 @@ GitHub commit history is useful version history but is not treated as the only b
 
 == Limitations ==
 
-Version 0.1.x is intentionally conservative:
+Version 0.2.x remains intentionally conservative:
 
-* Remote JSON is never applied automatically by cron.
+* Automatic apply is optional and disabled by default.
 * The plugin performs structural validation and exact post-save roundtrip verification, but it cannot prove every widget, add-on, dynamic tag, Theme Builder condition, form action, or site-specific dependency is valid.
+* WP-Cron is request-driven and the one-minute polling cadence is not a real-time guarantee.
 * Production use should be verified on staging first, especially for Elementor Pro, Theme Builder, Loops, Forms, WooCommerce, Dynamic Tags, Components, and Atomic/V4 content.
 * The GitHub App must already exist and be installed on the selected repository.
+* Single-repository mode is safe only when the repository is private; `site-sync` is the recommended data branch.
 
 == Uninstall ==
 
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.2.0 =
+* Add opt-in automatic application of fresh, conflict-free GitHub changes using the existing snapshot, validation, readback and rollback gates.
+* Check GitHub through request-driven WP-Cron on a one-minute target cadence and migrate the old ten-minute schedule automatically.
+* Document private single-repository mode using a dedicated `site-sync` branch and `site-data/elementor` root.
+* Keep automatic apply disabled by default so existing installations do not start writing Elementor content without an explicit administrator choice.
 
 = 0.1.2 =
 * Correct the admin copy to describe the v0.1.x manual-apply safety rule accurately.

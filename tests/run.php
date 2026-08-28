@@ -14,16 +14,33 @@ if (!function_exists('wp_salt')) {
         return 'elementor-json-bridge-test-salt-' . $scheme;
     }
 }
+if (!function_exists('get_option')) {
+    function get_option(string $option, mixed $default = false): mixed {
+        unset($option);
+        return $default;
+    }
+}
+if (!function_exists('wp_parse_args')) {
+    function wp_parse_args(mixed $args, array $defaults = []): array {
+        return array_merge($defaults, is_array($args) ? $args : []);
+    }
+}
 
 require_once dirname(__DIR__) . '/includes/Support/CanonicalJson.php';
 require_once dirname(__DIR__) . '/includes/Elementor/PayloadValidator.php';
 require_once dirname(__DIR__) . '/includes/Security/SecretBox.php';
 require_once dirname(__DIR__) . '/includes/Settings.php';
+require_once dirname(__DIR__) . '/includes/Sync/State.php';
+require_once dirname(__DIR__) . '/includes/Sync/AutoApply.php';
+require_once dirname(__DIR__) . '/includes/Cron/Scheduler.php';
 
+use Webactueel\ElementorJsonBridge\Cron\Scheduler;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
 use Webactueel\ElementorJsonBridge\Settings;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
+use Webactueel\ElementorJsonBridge\Sync\AutoApply;
+use Webactueel\ElementorJsonBridge\Sync\State;
 
 $tests = [];
 
@@ -194,6 +211,32 @@ $tests['repo-path-sanitization-normalizes-backslashes'] = static function (): vo
     $actual = Settings::sanitize_repo_path('..\\elementor\\pages\\..\\safe folder');
     if ($actual !== 'elementor/pages/safe-folder') {
         throw new RuntimeException('Unexpected normalized repo path: ' . $actual);
+    }
+};
+
+$tests['automatic-apply-defaults-off'] = static function (): void {
+    $settings = Settings::all();
+    if (($settings['auto_apply'] ?? null) !== 0) {
+        throw new RuntimeException('Automatic apply must be disabled by default.');
+    }
+};
+
+$tests['automatic-apply-policy-is-opt-in-and-pending-only'] = static function (): void {
+    if (!AutoApply::should_apply(1, State::REMOTE_PENDING)) {
+        throw new RuntimeException('Enabled automatic apply rejected a pending remote change.');
+    }
+    if (AutoApply::should_apply(0, State::REMOTE_PENDING)) {
+        throw new RuntimeException('Disabled automatic apply accepted a pending remote change.');
+    }
+    if (AutoApply::should_apply(1, State::CLEAN)) {
+        throw new RuntimeException('Automatic apply accepted a non-pending state.');
+    }
+};
+
+$tests['remote-poll-target-is-one-minute'] = static function (): void {
+    $reflection = new ReflectionClass(Scheduler::class);
+    if ($reflection->getConstant('POLL_INTERVAL_SECONDS') !== 60) {
+        throw new RuntimeException('Remote polling is not configured for the one-minute target cadence.');
     }
 };
 

@@ -4,15 +4,16 @@ A conservative WordPress plugin that synchronizes selected Elementor documents w
 
 ## Core flow
 
-`Elementor -> WordPress plugin -> private GitHub JSON repo -> reviewed edit -> plugin -> backup -> validate -> Elementor save -> readback -> rollback on failure`
+`Elementor -> WordPress plugin -> private GitHub repo/branch -> reviewed edit -> fresh conflict check -> optional automatic apply -> backup -> validate -> Elementor save -> readback -> rollback on failure`
 
 ## Safety contract
 
 - No OpenAI API and no MCP server are required by this plugin.
 - GitHub authentication uses Device Flow. Never commit access tokens, refresh tokens, client secrets or site credentials.
-- Real Elementor JSON belongs in a separate **private** content repository. This source repository must stay free of client/site content.
+- Real Elementor JSON must stay in private GitHub storage. A separate private content repo is simplest; single-repository mode is supported only when this repository is private and site JSON uses the dedicated `site-sync` branch.
 - Existing remote files with unknown history are never overwritten.
-- Every remote apply requires an administrator action in v0.1.x.
+- Automatic remote apply is opt-in in v0.2.0 and disabled by default.
+- Both manual and automatic apply recheck the remote SHA and local base before any Elementor write.
 - Every apply creates a local snapshot first.
 - Incoming JSON is structurally validated before save.
 - Synchronization uses local SHA-256 fingerprints plus GitHub blob SHAs to detect stale/conflicting state.
@@ -58,7 +59,7 @@ composer audit
 
 ## GitHub repository used for site JSON
 
-Use a different private repository per site or controlled environment. A typical JSON layout is:
+The simplest setup is a different private repository per site or controlled environment:
 
 ```text
 elementor/pages/42.json
@@ -67,8 +68,24 @@ elementor/templates/120.json
 elementor/custom/{post-type}/123.json
 ```
 
-Never put those real files in this public source repo.
+### Optional single-repository mode
+
+If you want plugin source and website JSON in one GitHub repository, make this repository private first. Keep plugin source on `main`, use a dedicated `site-sync` branch for website data, and configure the plugin like this:
+
+```text
+Repository: Elementorconnector
+Branch: site-sync
+JSON folder: site-data/elementor
+```
+
+Do not synchronize real site JSON while the repository is public. The plugin rejects public repositories before reading or writing synchronized content. Using `site-sync` also keeps normal website-content commits away from the source `main` branch and its CI workflow.
+
+## Automatic apply
+
+Version 0.2.0 can apply fresh remote changes without an administrator click. The setting is off by default. When enabled, request-driven WP-Cron checks about once per minute. Before an automatic write, the plugin checks GitHub again and then uses the same conflict, snapshot, validation, readback and rollback sequence as a manual apply.
+
+WP-Cron is request-driven, so one minute is a target cadence rather than a hard real-time guarantee.
 
 ## Status
 
-Version `0.1.2` is intentionally conservative. Source/static checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before production use.
+Version `0.2.0` adds opt-in automatic apply and private single-repository support. Source/static/controlled checks are useful evidence, but they do not prove a specific production site. A real staging roundtrip remains required before a production-ready claim.
