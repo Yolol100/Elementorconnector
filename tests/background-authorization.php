@@ -6,7 +6,9 @@ $root = dirname(__DIR__);
 define('ABSPATH', __DIR__ . '/');
 
 $GLOBALS['ejb_test_user'] = 0;
+$GLOBALS['ejb_test_allow_bridge'] = true;
 $GLOBALS['ejb_test_allow_edit'] = true;
+$GLOBALS['ejb_test_throw_apply'] = false;
 $GLOBALS['ejb_test_settings'] = [
     'github_client_id' => 'Iv1.test',
     'repo_owner' => 'owner',
@@ -53,7 +55,7 @@ if (!function_exists('user_can')) {
             return false;
         }
         if ($capability === 'manage_elementor_json_bridge') {
-            return true;
+            return (bool) $GLOBALS['ejb_test_allow_bridge'];
         }
         if ($capability === 'edit_post') {
             return (bool) $GLOBALS['ejb_test_allow_edit'] && (($args[0] ?? 0) === 123);
@@ -109,6 +111,9 @@ final class EJB_Test_Manager {
         if ($id !== 123 || get_current_user_id() !== 42) {
             throw new RuntimeException('Background actor was not active during apply.');
         }
+        if ($GLOBALS['ejb_test_throw_apply']) {
+            throw new RuntimeException('Simulated apply failure.');
+        }
         return ['status' => 'verified'];
     }
 }
@@ -118,6 +123,21 @@ require_once $root . '/includes/Settings.php';
 require_once $root . '/includes/Sync/State.php';
 require_once $root . '/includes/Lifecycle/Hooks.php';
 require_once $root . '/includes/Sync/AutoApply.php';
+
+$GLOBALS['ejb_test_user'] = 42;
+$captured = Webactueel\ElementorJsonBridge\Settings::sanitize([
+    'github_client_id' => 'Iv1.test',
+    'repo_owner' => 'owner',
+    'repo_name' => 'repo',
+    'repo_branch' => 'site-sync',
+    'repo_root' => 'site-data/elementor',
+    'auto_export' => 1,
+    'auto_apply' => 1,
+]);
+if (($captured['auto_apply_actor'] ?? 0) !== 42) {
+    throw new RuntimeException('Enabling Automatic apply did not bind the current administrator actor.');
+}
+$GLOBALS['ejb_test_user'] = 0;
 
 $manager = new EJB_Test_Manager();
 $auto = new Webactueel\ElementorJsonBridge\Sync\AutoApply($manager);
@@ -138,6 +158,27 @@ if ($manager->checks !== 0 || $manager->applies !== 0) {
 }
 if (get_current_user_id() !== 0) {
     throw new RuntimeException('Background user context leaked after a denied automatic apply.');
+}
+
+$GLOBALS['ejb_test_allow_edit'] = true;
+$GLOBALS['ejb_test_allow_bridge'] = false;
+$manager = new EJB_Test_Manager();
+$auto = new Webactueel\ElementorJsonBridge\Sync\AutoApply($manager);
+$auto->apply_pending();
+if ($manager->checks !== 0 || $manager->applies !== 0) {
+    throw new RuntimeException('An actor without the bridge capability reached the synchronization path.');
+}
+
+$GLOBALS['ejb_test_allow_bridge'] = true;
+$GLOBALS['ejb_test_throw_apply'] = true;
+$manager = new EJB_Test_Manager();
+$auto = new Webactueel\ElementorJsonBridge\Sync\AutoApply($manager);
+$auto->apply_pending();
+if ($manager->checks !== 1 || $manager->applies !== 1) {
+    throw new RuntimeException('The simulated failing apply did not reach the guarded write path.');
+}
+if (get_current_user_id() !== 0) {
+    throw new RuntimeException('Background user context leaked after a failed automatic apply.');
 }
 
 echo "PASS background-authorization\n";
