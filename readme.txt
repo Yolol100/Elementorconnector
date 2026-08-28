@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.1
+Stable tag: 0.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,10 @@ Version 0.1.x is intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.1.2 =
+* Correct the admin copy to describe the v0.1.x manual-apply safety rule accurately.
+* Expand CI coverage to PHP 8.1 through 8.5 and strengthen permanent regression coverage.
 
 = 0.1.1 =
 * Keep structural validation independent from WordPress HTML escaping so regression checks can execute outside a loaded WordPress request.

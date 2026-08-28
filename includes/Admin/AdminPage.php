@@ -143,7 +143,7 @@ final class AdminPage {
 
 			<section class="ejb-card">
 				<h2><?php echo esc_html__( '3. Elementor documents', 'elementor-json-bridge' ); ?></h2>
-				<p><?php echo esc_html__( 'Remote changes are detected automatically, but applying a GitHub change always requires an administrator click in version 0.1.0.', 'elementor-json-bridge' ); ?></p>
+				<p><?php echo esc_html__( 'Remote changes are detected automatically, but applying a GitHub change always requires an administrator click in version 0.1.x.', 'elementor-json-bridge' ); ?></p>
 				<?php $this->document_table(); ?>
 			</section>
 		</div>
