@@ -94,7 +94,7 @@ The plugin does not use inbound webhooks. The target poll cadence is about one m
 
 == Security ==
 
-Only users with the custom `manage_elementor_json_bridge` capability can use the bridge. Activation grants that capability to Administrators only. Every document action additionally requires `edit_post` for that document.
+Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions additionally require `edit_post` for that document. Automatic apply runs without an interactive user and is limited to documents that an authorized administrator previously enabled for synchronization; it still performs fresh conflict, validation, snapshot, readback and rollback checks before a change can become verified.
 
 Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization.
 
@@ -143,6 +143,7 @@ GitHub authentication is always deleted on uninstall. Settings and snapshots are
 * Check GitHub through request-driven WP-Cron on a one-minute target cadence and migrate the old ten-minute schedule automatically.
 * Document private single-repository mode using a dedicated `site-sync` branch and `site-data/elementor` root.
 * Keep automatic apply disabled by default so existing installations do not start writing Elementor content without an explicit administrator choice.
+* Clarify that `edit_post` protects manual document actions while automatic apply is restricted to documents previously enabled by an authorized administrator.
 
 = 0.1.2 =
 * Correct the admin copy to describe the v0.1.x manual-apply safety rule accurately.
