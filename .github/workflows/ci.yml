@@ -36,6 +36,7 @@ jobs:
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
           php tests/run.php
+          php tests/background-authorization.php
 
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-lock
