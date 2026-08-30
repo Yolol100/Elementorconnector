@@ -155,7 +155,8 @@ require_once $root . '/includes/Sync/Manager.php';
 
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 
-$base = [
+$validator = new PayloadValidator();
+$base = $validator->validate_array([
     'title' => 'Base',
     'type' => 'wp-page',
     'version' => '0.4',
@@ -166,9 +167,10 @@ $base = [
         'settings' => [],
         'elements' => [],
     ]],
-];
+], 'wp-page');
 $incoming = $base;
 $incoming['title'] = 'Remote';
+$incoming = $validator->validate_array($incoming, 'wp-page');
 
 $base_hash = CanonicalJson::hash($base);
 $incoming_hash = CanonicalJson::hash($incoming);
@@ -192,7 +194,7 @@ $github = new EJB_Test_GitHub_Client([
     'content' => CanonicalJson::encode($incoming, true),
 ]);
 $snapshots = new EJB_Test_Snapshots();
-$manager = new Manager($documents, new PayloadValidator(), $github, $snapshots, new EJB_Test_Lock());
+$manager = new Manager($documents, $validator, $github, $snapshots, new EJB_Test_Lock());
 
 $result = $manager->apply_remote(123);
 if (($result['status'] ?? '') !== State::VERIFIED) {
@@ -229,7 +231,7 @@ $github = new EJB_Test_GitHub_Client([
     'content' => CanonicalJson::encode($incoming, true),
 ]);
 $snapshots = new EJB_Test_Snapshots();
-$manager = new Manager($documents, new PayloadValidator(), $github, $snapshots, new EJB_Test_Lock());
+$manager = new Manager($documents, $validator, $github, $snapshots, new EJB_Test_Lock());
 
 $failed = false;
 try {

@@ -64,8 +64,9 @@ final class PayloadValidator {
 			throw new RuntimeException( 'content must be a JSON array.' );
 		}
 
-		$this->nodes = 0;
-		$this->ids   = [];
+		$data['content'] = $this->canonicalize_elements( $data['content'] );
+		$this->nodes     = 0;
+		$this->ids       = [];
 		$this->validate_elements( $data['content'], 0 );
 
 		return $data;
@@ -79,6 +80,33 @@ final class PayloadValidator {
 			throw new RuntimeException( 'Unable to encode Elementor data for validation.' );
 		}
 		return $this->decode( $json, $expected_type );
+	}
+
+	private function canonicalize_elements( array $elements ): array {
+		foreach ( $elements as $index => $element ) {
+			if ( ! is_array( $element ) || array_is_list( $element ) ) {
+				continue;
+			}
+
+			$el_type = $element['elType'] ?? null;
+			if ( 'widget' === $el_type ) {
+				unset( $element['isInner'] );
+			} elseif ( ! array_key_exists( 'isInner', $element ) ) {
+				$element['isInner'] = false;
+			}
+
+			if ( array_key_exists( 'isLocked', $element ) && false === $element['isLocked'] ) {
+				unset( $element['isLocked'] );
+			}
+
+			if ( isset( $element['elements'] ) && is_array( $element['elements'] ) && array_is_list( $element['elements'] ) ) {
+				$element['elements'] = $this->canonicalize_elements( $element['elements'] );
+			}
+
+			$elements[ $index ] = $element;
+		}
+
+		return $elements;
 	}
 
 	private function validate_elements( array $elements, int $depth ): void {
@@ -110,6 +138,12 @@ final class PayloadValidator {
 			}
 			if ( 'widget' === $el_type && ( ! isset( $element['widgetType'] ) || ! is_string( $element['widgetType'] ) || '' === $element['widgetType'] ) ) {
 				throw new RuntimeException( 'An Elementor widget is missing widgetType.' );
+			}
+			if ( 'widget' !== $el_type && ( ! array_key_exists( 'isInner', $element ) || ! is_bool( $element['isInner'] ) ) ) {
+				throw new RuntimeException( 'An Elementor element has invalid isInner data.' );
+			}
+			if ( array_key_exists( 'isLocked', $element ) && ! is_bool( $element['isLocked'] ) ) {
+				throw new RuntimeException( 'An Elementor element has invalid isLocked data.' );
 			}
 			if ( ! array_key_exists( 'settings', $element ) || ! is_array( $element['settings'] ) ) {
 				throw new RuntimeException( 'An Elementor element has invalid settings.' );

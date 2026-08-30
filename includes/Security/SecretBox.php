@@ -32,8 +32,8 @@ final class SecretBox {
 		}
 
 		if ( function_exists( 'openssl_encrypt' ) ) {
-			$iv  = random_bytes( 12 );
-			$tag = '';
+			$iv     = random_bytes( 12 );
+			$tag    = '';
 			$cipher = openssl_encrypt(
 				$plaintext,
 				'aes-256-gcm',
@@ -73,20 +73,36 @@ final class SecretBox {
 			throw new RuntimeException( 'Stored GitHub credentials are invalid.' );
 		}
 
-		$key = $this->key();
+		$key       = $this->key();
 		$plaintext = false;
 
 		if ( 'sodium-secretbox' === ( $data['alg'] ?? '' ) && function_exists( 'sodium_crypto_secretbox_open' ) ) {
 			$nonce  = base64_decode( (string) ( $data['nonce'] ?? '' ), true );
 			$cipher = base64_decode( (string) ( $data['cipher'] ?? '' ), true );
-			if ( false !== $nonce && false !== $cipher ) {
-				$plaintext = sodium_crypto_secretbox_open( $cipher, $nonce, $key );
+			if (
+				false !== $nonce
+				&& false !== $cipher
+				&& SODIUM_CRYPTO_SECRETBOX_NONCEBYTES === strlen( $nonce )
+				&& strlen( $cipher ) >= SODIUM_CRYPTO_SECRETBOX_MACBYTES
+			) {
+				try {
+					$plaintext = sodium_crypto_secretbox_open( $cipher, $nonce, $key );
+				} catch ( \Throwable ) {
+					$plaintext = false;
+				}
 			}
 		} elseif ( 'aes-256-gcm' === ( $data['alg'] ?? '' ) && function_exists( 'openssl_decrypt' ) ) {
 			$iv     = base64_decode( (string) ( $data['iv'] ?? '' ), true );
 			$tag    = base64_decode( (string) ( $data['tag'] ?? '' ), true );
 			$cipher = base64_decode( (string) ( $data['cipher'] ?? '' ), true );
-			if ( false !== $iv && false !== $tag && false !== $cipher ) {
+			if (
+				false !== $iv
+				&& false !== $tag
+				&& false !== $cipher
+				&& 12 === strlen( $iv )
+				&& 16 === strlen( $tag )
+				&& '' !== $cipher
+			) {
 				$plaintext = openssl_decrypt(
 					$cipher,
 					'aes-256-gcm',

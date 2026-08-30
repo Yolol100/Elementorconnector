@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.2.1
+Stable tag: 0.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,7 +22,8 @@ Core safety rules:
 * Existing GitHub files with unknown history are never overwritten.
 * A SHA-256 base fingerprint detects simultaneous local and remote changes.
 * Every remote apply creates a local WordPress snapshot first.
-* Incoming JSON is structurally validated before save.
+* Rollback snapshots are integrity-checked against their stored SHA-256 fingerprint before use.
+* Incoming JSON is structurally validated and canonicalized to Elementor's raw-data defaults before save.
 * The saved document is read back and fingerprinted after save.
 * A failed roundtrip triggers automatic rollback to the local snapshot.
 * Automatic remote apply is opt-in and disabled by default. When enabled, the plugin rechecks fresh GitHub/local state before applying.
@@ -50,8 +51,8 @@ The private repository itself is not created by this plugin. Create it first in 
 4. The plugin checks enabled documents about once per minute through WP-Cron. WP-Cron is request-driven, so this is not an exact clock.
 5. If Automatic apply is disabled, review a remote_pending change and click Apply GitHub.
 6. If Automatic apply is enabled, a pending change is checked again and then applied automatically only when the live document still matches the trusted base, the GitHub SHA/fingerprint are fresh, and the administrator who enabled Automatic apply still has the bridge capability plus `edit_post` for that document.
-7. Every apply creates a snapshot, validates the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
-8. If verification fails, the snapshot is restored.
+7. Every apply creates a snapshot, validates and canonicalizes the JSON, saves it through Elementor, reads it back, and verifies the SHA-256 fingerprint.
+8. If verification fails, the integrity-checked snapshot is restored.
 
 Normal WordPress or Elementor saves can be exported automatically when Automatic export is enabled. An automatic export refuses to overwrite a GitHub file whose SHA no longer matches the known base.
 
@@ -68,7 +69,7 @@ Each file uses Elementor's documented document wrapper:
 
 `title`, `type`, `version`, `page_settings`, `content`.
 
-The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. These bridge files are not promised as drop-in Template Library imports for live pages/posts; saved Elementor Library templates keep their own template document type.
+The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. Before hashing or saving, the bridge normalizes Elementor raw-data defaults such as `isInner` for non-widget elements and omitted false `isLocked` values; malformed types are rejected rather than silently coerced. These bridge files are not promised as drop-in Template Library imports for live pages/posts; saved Elementor Library templates keep their own template document type.
 
 It does not convert V3 to V4, V4 to V3, invent site IDs, or rewrite dynamic references.
 
@@ -98,7 +99,7 @@ Only users with the custom `manage_elementor_json_bridge` capability can configu
 
 Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization.
 
-GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. If neither encryption primitive exists, GitHub credentials are not stored.
+GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. Stored packages validate their algorithm-specific nonce/IV, authentication-tag, and ciphertext structure before decryption and fail closed on malformed input. If neither encryption primitive exists, GitHub credentials are not stored.
 
 The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does not expose an inbound public webhook.
 
@@ -117,9 +118,15 @@ No Elementor JSON is sent to OpenAI by this plugin. ChatGPT or Codex access is a
 
 == Backups and rollback ==
 
-Before applying GitHub JSON or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained.
+Before applying GitHub JSON or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained. Before a snapshot is used, its JSON is hashed again and compared with the SHA-256 fingerprint stored when that snapshot was created; damaged or tampered snapshot content is rejected.
 
 GitHub commit history is useful version history but is not treated as the only backup.
+
+== Runtime verification ==
+
+The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.2.2 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, and a real `edit_post` denial path.
+
+This CI evidence validates those exact configurations. It does not replace a site-specific staging roundtrip for production websites with additional Elementor Pro features, widgets, add-ons, dynamic data, or hosting-specific behavior.
 
 == Limitations ==
 
@@ -137,6 +144,12 @@ Version 0.2.x remains intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.2.2 =
+* Fail closed on malformed encrypted credential packages by validating Sodium nonce and AES-GCM IV/tag structure before decryption.
+* Verify each rollback snapshot against the SHA-256 fingerprint stored at creation time before the snapshot can be restored.
+* Canonicalize Elementor raw-data defaults before hashing and save so normal `isInner`/`isLocked` normalization cannot cause a false readback failure, while malformed field types remain rejected.
+* Add real WordPress + MySQL + Elementor runtime acceptance for WordPress 6.8.3/PHP 8.1 and the current WordPress/PHP 8.3 environment, alongside permanent security and rollback regressions.
 
 = 0.2.1 =
 * Fix automatic cron apply by running it under the administrator who explicitly enabled Automatic apply, while rechecking that user's bridge capability and `edit_post` permission for each document.
