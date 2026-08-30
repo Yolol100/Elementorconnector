@@ -33,11 +33,12 @@ error
 3. The user chooses whether to include the active Elementor Theme Builder header/footer.
 4. The protected REST route rechecks bridge capability, `edit_post`, post type and Elementor editability; UI visibility is never treated as authorization.
 5. Without site parts, the existing `Documents::payload()` wrapper is returned directly for local download.
-6. With site parts, the plugin asks Elementor Pro's Theme Builder condition manager for header/footer documents in a temporary singular query context.
+6. With site parts, the plugin asks Elementor Pro's Theme Builder condition manager for header/footer documents in a temporary singular query context. Pages use `page_id` so WordPress exposes page conditionals; Posts use `p` so WordPress exposes single-post conditionals.
 7. Matching site parts are exported through the same `Documents` adapter and packaged with the source document in `elementor-json-bridge/site-parts-bundle` version 1.
-8. Missing Pro or unmatched header/footer is non-destructive: the source document remains downloadable and the response carries warnings.
+8. Missing Pro, unmatched header/footer or an unexpected Theme Builder condition-resolution failure is non-destructive: the source document remains downloadable and the response carries a stable warning.
 9. Products and all other post types fail closed server-side.
-10. No local-export operation reads GitHub credentials, changes sync metadata, writes Elementor content or creates rollback snapshots.
+10. Expected bridge validation errors may return their stable administrator-facing message; unexpected REST-layer throwables are normalized to a generic server error rather than exposing raw exception details.
+11. No local-export operation reads GitHub credentials, changes sync metadata, writes Elementor content or creates rollback snapshots.
 
 The site-parts bundle is a bridge transport artifact, not a claim of native single-template Elementor Library compatibility.
 
@@ -81,7 +82,7 @@ Snapshots are private WordPress records. Each snapshot stores a SHA-256 fingerpr
 
 ## Runtime evidence
 
-Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress/PHP 8.3 combination with Elementor 4.2.3. It exercises the production `Documents` adapter, real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback.
+Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress/PHP 8.3 combination with Elementor 4.2.3. It exercises the production `Documents` adapter, real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback. The 0.3.1 runtime probe also uses a minimal condition-manager double inside real WordPress to verify the actual `is_page`/`is_single` query context and queried object ID for Page versus Post lookups.
 
 Actual Elementor Pro Theme Builder condition matching remains configuration-scoped because the public CI environment contains Elementor Core only. The final modal visual/keyboard/assistive-technology behavior also remains a browser acceptance gate.
 

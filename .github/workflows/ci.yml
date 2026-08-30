@@ -41,6 +41,8 @@ jobs:
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
           php tests/local-export.php
+          php tests/site-parts.php
+          php tests/local-export-controller.php
           regression_status=0
           php tests/secretbox-invalid-packages.php || regression_status=1
           php tests/snapshot-integrity.php || regression_status=1
