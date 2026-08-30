@@ -35,6 +35,8 @@ jobs:
       - name: Zero-dependency tests
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+          node --check assets/js/admin.js
+          node --check assets/js/local-export.js
           php tests/run.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
