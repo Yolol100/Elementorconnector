@@ -61,14 +61,22 @@
 .ejb-export-modal__notice {
 	margin: 0;
 	border-radius: 12px;
+	overflow: hidden;
 }
 
-.ejb-export-modal__notice p {
-	margin-top: 0;
+.ejb-export-modal__notice .components-notice__content {
+	margin: 0;
+	padding: 10px 12px;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.ejb-export-modal__notice-message {
+	display: block;
 }
 
 .ejb-export-modal__notice ul {
-	margin: 8px 0 0 18px;
+	margin: 7px 0 0 18px;
 	list-style: disc;
 }
 
@@ -84,6 +92,57 @@
 	min-height: 40px;
 	border-radius: 999px;
 	padding-inline: 18px;
+}
+
+.ejb-export-toast.components-snackbar,
+.ejb-export-toast--fallback {
+	position: fixed;
+	right: 24px;
+	bottom: 24px;
+	z-index: 100001;
+	width: auto;
+	min-width: 280px;
+	max-width: min(380px, calc(100vw - 32px));
+	margin: 0;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 14px;
+	background: #1d2327;
+	color: #fff;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.ejb-export-toast.components-snackbar .components-snackbar__content {
+	padding: 12px 14px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.ejb-export-toast--fallback {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	box-sizing: border-box;
+	padding: 12px 14px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.ejb-export-toast__icon {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 22px;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	background: #68de7c;
+	color: #063b16;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.ejb-export-toast__message {
+	min-width: 0;
 }
 
 @media (max-width: 600px) {
@@ -105,5 +164,23 @@
 	.ejb-export-modal__actions .components-button {
 		justify-content: center;
 		width: 100%;
+	}
+
+	.ejb-export-toast.components-snackbar,
+	.ejb-export-toast--fallback {
+		left: 12px;
+		right: 12px;
+		bottom: 12px;
+		width: auto;
+		min-width: 0;
+		max-width: none;
+	}
+}
+
+@media (forced-colors: active) {
+	.ejb-export-toast.components-snackbar,
+	.ejb-export-toast--fallback,
+	.ejb-export-toast__icon {
+		border: 1px solid CanvasText;
 	}
 }
