@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
