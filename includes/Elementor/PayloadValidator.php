@@ -95,7 +95,7 @@ final class PayloadValidator {
 				$element['isInner'] = false;
 			}
 
-			if ( array_key_exists( 'isLocked', $element ) && empty( $element['isLocked'] ) ) {
+			if ( array_key_exists( 'isLocked', $element ) && false === $element['isLocked'] ) {
 				unset( $element['isLocked'] );
 			}
 
