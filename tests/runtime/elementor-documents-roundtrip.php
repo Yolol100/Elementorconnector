@@ -71,8 +71,21 @@ try {
     clean_post_cache($post_id);
 
     $readback = $validator->validate_array($documents->payload($post_id), $document_type);
-    if (!hash_equals(CanonicalJson::hash($incoming), CanonicalJson::hash($readback))) {
-        throw new RuntimeException('Real Elementor save/readback changed the synchronized payload.');
+    $incoming_hash = CanonicalJson::hash($incoming);
+    $readback_hash = CanonicalJson::hash($readback);
+    if (!hash_equals($incoming_hash, $readback_hash)) {
+        throw new RuntimeException(
+            'Real Elementor save/readback changed the controlled payload. ' .
+            wp_json_encode(
+                [
+                    'incoming_hash' => $incoming_hash,
+                    'readback_hash' => $readback_hash,
+                    'incoming' => $incoming,
+                    'readback' => $readback,
+                ],
+                JSON_UNESCAPED_SLASHES
+            )
+        );
     }
 
     $saved_post = get_post($post_id);
@@ -131,7 +144,7 @@ try {
             'elementor' => ELEMENTOR_VERSION,
             'bridge' => EJB_VERSION,
             'document_type' => $document_type,
-            'roundtrip_hash' => CanonicalJson::hash($readback),
+            'roundtrip_hash' => $readback_hash,
             'snapshot_integrity_rejected_tamper' => true,
             'permission_denied_without_user' => true,
         ],
