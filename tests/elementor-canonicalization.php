@@ -48,12 +48,21 @@ if (array_key_exists('isLocked', $widget)) {
     throw new RuntimeException('False isLocked was not removed to match Elementor raw data.');
 }
 
-$payload['content'][0]['isInner'] = 'false';
-try {
-    $validator->validate_array($payload, 'wp-page');
-} catch (RuntimeException) {
-    fwrite(STDOUT, "PASS elementor-canonicalization\n");
-    exit(0);
-}
+$expect_runtime_exception = static function (array $candidate, string $message) use ($validator): void {
+    try {
+        $validator->validate_array($candidate, 'wp-page');
+    } catch (RuntimeException) {
+        return;
+    }
+    throw new RuntimeException($message);
+};
 
-throw new RuntimeException('Invalid non-boolean isInner data was accepted.');
+$invalid_inner = $payload;
+$invalid_inner['content'][0]['isInner'] = 'false';
+$expect_runtime_exception($invalid_inner, 'Invalid non-boolean isInner data was accepted.');
+
+$invalid_lock = $payload;
+$invalid_lock['content'][0]['isLocked'] = 0;
+$expect_runtime_exception($invalid_lock, 'Invalid non-boolean isLocked data was accepted.');
+
+fwrite(STDOUT, "PASS elementor-canonicalization\n");
