@@ -1,0 +1,59 @@
+<?php
+
+declare(strict_types=1);
+
+define('ABSPATH', __DIR__ . '/');
+
+require_once dirname(__DIR__) . '/includes/Elementor/PayloadValidator.php';
+
+use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
+
+$validator = new PayloadValidator();
+$payload = [
+    'title' => 'Canonicalization',
+    'type' => 'wp-page',
+    'version' => '0.4',
+    'page_settings' => [],
+    'content' => [
+        [
+            'id' => 'container1',
+            'elType' => 'container',
+            'settings' => [],
+            'elements' => [
+                [
+                    'id' => 'widget1',
+                    'elType' => 'widget',
+                    'widgetType' => 'heading',
+                    'settings' => ['title' => 'Hello'],
+                    'elements' => [],
+                    'isInner' => false,
+                    'isLocked' => false,
+                ],
+            ],
+        ],
+    ],
+];
+
+$normalized = $validator->validate_array($payload, 'wp-page');
+$container = $normalized['content'][0] ?? [];
+$widget = $container['elements'][0] ?? [];
+
+if (($container['isInner'] ?? null) !== false) {
+    throw new RuntimeException('A non-widget element without isInner was not canonicalized to false.');
+}
+if (array_key_exists('isInner', $widget)) {
+    throw new RuntimeException('Widget isInner was not removed to match Elementor raw data.');
+}
+if (array_key_exists('isLocked', $widget)) {
+    throw new RuntimeException('False isLocked was not removed to match Elementor raw data.');
+}
+
+$payload['content'][0]['isInner'] = 'false';
+try {
+    $validator->validate_array($payload, 'wp-page');
+} catch (RuntimeException) {
+    fwrite(STDOUT, "PASS elementor-canonicalization\n");
+    exit(0);
+}
+
+throw new RuntimeException('Invalid non-boolean isInner data was accepted.');
