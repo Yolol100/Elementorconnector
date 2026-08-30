@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use RuntimeException;
+use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
@@ -42,6 +42,7 @@ if (is_wp_error($post_id)) {
     throw new RuntimeException('Unable to create the runtime test page: ' . $post_id->get_error_message());
 }
 $post_id = (int) $post_id;
+$snapshot_id = 0;
 
 try {
     update_post_meta($post_id, '_elementor_edit_mode', 'builder');
@@ -81,6 +82,36 @@ try {
         throw new RuntimeException('The real WordPress document title did not roundtrip.');
     }
 
+    $snapshots = new Snapshots();
+    $snapshot_id = $snapshots->create($post_id, $readback, 'runtime_integrity');
+    $snapshot_readback = $snapshots->payload($snapshot_id, $post_id);
+    if (!hash_equals(CanonicalJson::hash($readback), CanonicalJson::hash($snapshot_readback))) {
+        throw new RuntimeException('A real database rollback snapshot did not roundtrip.');
+    }
+
+    $tampered_snapshot = $readback;
+    $tampered_snapshot['title'] = 'Tampered runtime snapshot';
+    $tamper_result = wp_update_post(
+        [
+            'ID' => $snapshot_id,
+            'post_content' => wp_slash(CanonicalJson::encode($tampered_snapshot, true)),
+        ],
+        true
+    );
+    if (is_wp_error($tamper_result)) {
+        throw new RuntimeException('Unable to prepare the real snapshot integrity test.');
+    }
+
+    $snapshot_tamper_rejected = false;
+    try {
+        $snapshots->payload($snapshot_id, $post_id);
+    } catch (RuntimeException) {
+        $snapshot_tamper_rejected = true;
+    }
+    if (!$snapshot_tamper_rejected) {
+        throw new RuntimeException('The real database accepted a rollback snapshot with a mismatched integrity hash.');
+    }
+
     wp_set_current_user(0);
     $permission_denied = false;
     try {
@@ -103,12 +134,16 @@ try {
             'bridge' => EJB_VERSION,
             'document_type' => $document_type,
             'roundtrip_hash' => CanonicalJson::hash($readback),
+            'snapshot_integrity_rejected_tamper' => true,
             'permission_denied_without_user' => true,
         ],
         JSON_UNESCAPED_SLASHES
     ) . PHP_EOL;
 } finally {
     wp_set_current_user((int) $admin->ID);
+    if ($snapshot_id > 0) {
+        wp_delete_post($snapshot_id, true);
+    }
     wp_delete_post($post_id, true);
     wp_set_current_user($previous_user);
 }
