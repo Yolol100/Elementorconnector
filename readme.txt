@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.3.1
+Stable tag: 0.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,8 @@ Clicking the action opens an accessible WordPress React modal built with WordPre
 * With the switch off, the browser downloads the current page or post using the bridge's normal Elementor document JSON wrapper.
 * With the switch on and Elementor Pro Theme Builder available, the plugin resolves the matching Theme Builder header and footer for the current document and downloads one bridge bundle JSON containing `document`, `header`, and `footer` entries plus small site-part metadata.
 * If Elementor Pro is not active, no matching header/footer exists, or Theme Builder cannot safely resolve the current condition context, the source document still downloads and the modal reports which requested site parts were unavailable.
+
+After a clean export, the modal closes and a compact WordPress Snackbar confirms the download. This replaces the previous large green success Notice. Warnings and errors remain in the modal because they can require attention.
 
 The header/footer bundle is a transport format owned by Elementor JSON Bridge (`elementor-json-bridge/site-parts-bundle`). It is not claimed to be a native single-template Elementor Library import. The individual `document`, `header`, and `footer` values keep their Elementor document wrappers so they can be inspected or processed separately.
 
@@ -139,9 +141,9 @@ GitHub commit history is useful version history but is not treated as the only b
 
 == Runtime verification ==
 
-The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.3.1 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, and the graceful header/footer fallback when Elementor Pro is not installed. Controlled Theme Builder regressions additionally verify that Page context uses `page_id`, Post context uses `p`, globals are restored, and condition-resolution failures degrade to a source-only export warning. A controlled REST regression verifies that unexpected exceptions do not leak their raw message to the client.
+The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.3.2 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, and the graceful header/footer fallback when Elementor Pro is not installed. Controlled Theme Builder regressions additionally verify that Page context uses `page_id`, Post context uses `p`, globals are restored, and condition-resolution failures degrade to a source-only export warning. A controlled REST regression verifies that unexpected exceptions do not leak their raw message to the client.
 
-This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final modal appearance still require a staging/browser check on a site with Elementor Pro because the public CI runtime contains Elementor Core only.
+This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final modal/snackbar appearance still require a staging/browser check on a site with Elementor Pro because the public CI runtime contains Elementor Core only.
 
 == Limitations ==
 
@@ -160,6 +162,11 @@ Version 0.3.x remains intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.3.2 =
+* Replace the oversized green success Notice after a clean local export with a compact WordPress Snackbar styled as a small WordPress/Material-inspired confirmation surface.
+* Close the export modal after a clean successful download while keeping warnings and errors visible in the modal.
+* Shorten the success copy and bump the plugin version so the updated JavaScript and CSS are cache-busted on upgrade.
 
 = 0.3.1 =
 * Fix Theme Builder condition context so Pages use WordPress `page_id` semantics while Posts use `p`, preserving the correct `is_page`/`is_single` condition state.

@@ -6,8 +6,8 @@
 	const wpComponents = window.wp?.components;
 	if (!config || !wpElement || !wpComponents) return;
 
-	const { createElement: h, useEffect, useState } = wpElement;
-	const { Button, Modal, Notice, ToggleControl } = wpComponents;
+	const { createElement: h, Fragment, useEffect, useState } = wpElement;
+	const { Button, Modal, Notice, Snackbar, ToggleControl } = wpComponents;
 
 	const request = async (postId, includeSiteParts) => {
 		const response = await fetch(`${config.restUrl}/local-export/${postId}`, {
@@ -41,11 +41,22 @@
 		window.URL.revokeObjectURL(url);
 	};
 
+	const SuccessIcon = () =>
+		h(
+			'span',
+			{
+				className: 'ejb-export-toast__icon',
+				'aria-hidden': 'true',
+			},
+			'✓'
+		);
+
 	const ExportModal = () => {
 		const [postId, setPostId] = useState(null);
 		const [includeSiteParts, setIncludeSiteParts] = useState(false);
 		const [busy, setBusy] = useState(false);
 		const [notice, setNotice] = useState(null);
+		const [toast, setToast] = useState(null);
 
 		useEffect(() => {
 			const handleClick = (event) => {
@@ -57,13 +68,41 @@
 				setPostId(selectedId);
 				setIncludeSiteParts(false);
 				setNotice(null);
+				setToast(null);
 			};
 
 			document.addEventListener('click', handleClick);
 			return () => document.removeEventListener('click', handleClick);
 		}, []);
 
-		if (!postId) return null;
+		const dismissToast = () => setToast(null);
+		const toastContent = toast
+			? Snackbar
+				? h(
+					Snackbar,
+					{
+						className: 'ejb-export-toast',
+						explicitDismiss: false,
+						icon: h(SuccessIcon),
+						onRemove: dismissToast,
+						politeness: 'polite',
+						spokenMessage: toast,
+					},
+					toast
+				)
+				: h(
+					'div',
+					{
+						className: 'ejb-export-toast ejb-export-toast--fallback',
+						role: 'status',
+						'aria-live': 'polite',
+					},
+					h(SuccessIcon),
+					h('span', { className: 'ejb-export-toast__message' }, toast)
+				)
+			: null;
+
+		if (!postId) return toastContent;
 
 		const close = () => {
 			if (busy) return;
@@ -78,11 +117,18 @@
 				const data = await request(postId, includeSiteParts);
 				downloadJson(data.filename, data.export);
 				const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
-				setNotice({
-					status: warnings.length ? 'warning' : 'success',
-					message: warnings.length ? config.strings.downloadedWarning : config.strings.downloaded,
-					warnings,
-				});
+				if (warnings.length) {
+					setNotice({
+						status: 'warning',
+						message: config.strings.downloadedWarning,
+						warnings,
+					});
+				} else {
+					setPostId(null);
+					setIncludeSiteParts(false);
+					setNotice(null);
+					setToast(config.strings.downloaded);
+				}
 			} catch (error) {
 				setNotice({
 					status: 'error',
@@ -100,9 +146,10 @@
 				{
 					status: notice.status,
 					isDismissible: false,
+					politeness: notice.status === 'error' ? 'assertive' : 'polite',
 					className: 'ejb-export-modal__notice',
 				},
-				h('p', null, notice.message),
+				h('span', { className: 'ejb-export-modal__notice-message' }, notice.message),
 				notice.warnings.length
 					? h(
 						'ul',
@@ -113,7 +160,7 @@
 			)
 			: null;
 
-		return h(
+		const modal = h(
 			Modal,
 			{
 				title: config.strings.title,
@@ -161,6 +208,8 @@
 				)
 			)
 		);
+
+		return h(Fragment, null, toastContent, modal);
 	};
 
 	const root = document.createElement('div');

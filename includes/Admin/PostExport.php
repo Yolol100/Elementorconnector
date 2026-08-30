@@ -74,7 +74,7 @@ final class PostExport {
 					'cancel'            => __( 'Cancel', 'elementor-json-bridge' ),
 					'export'            => __( 'Export JSON', 'elementor-json-bridge' ),
 					'exporting'         => __( 'Preparing JSON…', 'elementor-json-bridge' ),
-					'downloaded'        => __( 'The JSON export has been downloaded.', 'elementor-json-bridge' ),
+					'downloaded'        => __( 'JSON export downloaded.', 'elementor-json-bridge' ),
 					'downloadedWarning' => __( 'The JSON was downloaded, but not every requested site part could be included.', 'elementor-json-bridge' ),
 					'failed'            => __( 'The Elementor JSON export failed.', 'elementor-json-bridge' ),
 				],
