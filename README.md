@@ -27,6 +27,7 @@ Local admin export:
 - A successful apply is not trusted until the document is read back and fingerprinted.
 - Local download is read-only with respect to GitHub sync state.
 - Local download is allowed only for Elementor-built WordPress `page` and `post` documents; Products are rejected in both UI and server-side service.
+- Unexpected local-export failures are normalized at the REST boundary instead of returning raw exception details.
 - Production use remains staging-first, especially with Pro, Theme Builder, Loops, Forms, WooCommerce, Dynamic Tags, Components and Atomic/V4 content.
 
 ## Page and post JSON export
@@ -60,6 +61,7 @@ includes/                     Remaining plugin application code
 scripts/build-zip.sh          Reproducible runtime package builder
 tests/local-export.php        Controlled page/post/product export regression
 tests/site-parts.php          Controlled Theme Builder query-context/fallback regression
+tests/local-export-controller.php Controlled REST error-boundary regression
 tests/runtime/                Real WordPress + MySQL + Elementor acceptance
 docs/architecture.md          Runtime boundaries and state model
 AGENTS.md                     Rules for AI/code agents working in this repo
@@ -120,6 +122,6 @@ Version `0.3.1` keeps PHP 8.1-8.5 regression coverage, PHPCS/PHP compatibility, 
 - Product exclusion;
 - graceful header/footer fallback when Elementor Pro is absent.
 
-Controlled Theme Builder coverage additionally proves that Page lookups use `page_id`, Post lookups use `p`, prior WordPress query globals are restored, and an Elementor Pro condition-resolution exception degrades to a source-only export warning.
+Controlled Theme Builder coverage additionally proves that Page lookups use `page_id`, Post lookups use `p`, prior WordPress query globals are restored, and an Elementor Pro condition-resolution exception degrades to a source-only export warning. Controlled REST coverage verifies that unexpected exceptions do not leak their raw message to the client.
 
 Actual Elementor Pro Theme Builder condition matching cannot be proven by the public Core-only CI environment. The final modal appearance and keyboard/screen-reader behavior also require a browser check on a WordPress admin screen. Those are staging/browser gates rather than unresolved repository logic claims.
