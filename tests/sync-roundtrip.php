@@ -8,7 +8,7 @@ define('ABSPATH', __DIR__ . '/');
 $GLOBALS['ejb_meta'] = [];
 $GLOBALS['ejb_post'] = (object) ['ID' => 123, 'post_type' => 'page'];
 $GLOBALS['ejb_saved_payload'] = null;
-$GLOBALS['ejb_force_readback_mismatch'] = false;
+$GLOBALS['ejb_readback_mismatches_left'] = 0;
 
 if (!function_exists('get_post_meta')) {
     function get_post_meta(int $post_id, string $key, bool $single = false): mixed {
@@ -84,12 +84,12 @@ final class EJB_Test_Documents {
 
     public function payload(int $post_id): array {
         unset($post_id);
-        if ($GLOBALS['ejb_force_readback_mismatch'] && $GLOBALS['ejb_saved_payload'] !== null) {
-            $mismatch = $GLOBALS['ejb_saved_payload'];
-            $mismatch['title'] = 'Mutated by runtime';
-            return $mismatch;
+        $payload = $GLOBALS['ejb_saved_payload'] ?? $this->payload;
+        if ($GLOBALS['ejb_readback_mismatches_left'] > 0 && $GLOBALS['ejb_saved_payload'] !== null) {
+            --$GLOBALS['ejb_readback_mismatches_left'];
+            $payload['title'] = 'Mutated by runtime';
         }
-        return $GLOBALS['ejb_saved_payload'] ?? $this->payload;
+        return $payload;
     }
 
     public function document_type(int $post_id): string {
@@ -184,7 +184,7 @@ $GLOBALS['ejb_meta'] = [
     State::META_PENDING_HASH => $incoming_hash,
 ];
 $GLOBALS['ejb_saved_payload'] = null;
-$GLOBALS['ejb_force_readback_mismatch'] = false;
+$GLOBALS['ejb_readback_mismatches_left'] = 0;
 
 $documents = new EJB_Test_Documents($base);
 $github = new EJB_Test_GitHub_Client([
@@ -221,7 +221,7 @@ $GLOBALS['ejb_meta'] = [
     State::META_PENDING_HASH => $incoming_hash,
 ];
 $GLOBALS['ejb_saved_payload'] = null;
-$GLOBALS['ejb_force_readback_mismatch'] = true;
+$GLOBALS['ejb_readback_mismatches_left'] = 1;
 
 $documents = new EJB_Test_Documents($base);
 $github = new EJB_Test_GitHub_Client([
@@ -240,7 +240,6 @@ try {
 if (!$failed) {
     throw new RuntimeException('Readback mismatch did not fail closed with a verified rollback.');
 }
-$GLOBALS['ejb_force_readback_mismatch'] = false;
 if (CanonicalJson::hash($documents->payload(123)) !== $base_hash) {
     throw new RuntimeException('Rollback did not restore the previous Elementor payload.');
 }
