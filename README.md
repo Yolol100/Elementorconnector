@@ -32,7 +32,7 @@ Local admin export:
 
 ## Page and post JSON export
 
-Version `0.3.1` adds and hardens `Export Elementor JSON` on the normal WordPress **Pages** and **Posts** lists for documents built with Elementor.
+Version `0.3.2` adds and hardens `Export Elementor JSON` on the normal WordPress **Pages** and **Posts** lists for documents built with Elementor.
 
 The action opens a modal built with `@wordpress/components` and WordPress React. Its interaction model stays native to WordPress admin while the scoped surface, radius and button treatment borrow from Material Design 3.
 
@@ -42,7 +42,9 @@ The modal offers **Include header and footer**:
 - On: if Elementor Pro Theme Builder is available, resolve the matching header and footer for that document and download one JSON bundle containing `document`, `header`, `footer`, and site-part metadata.
 - If Pro is unavailable, no site part matches, or Theme Builder cannot safely resolve the current condition context, the source document still downloads and the modal reports the missing site parts.
 
-For Theme Builder condition evaluation, Pages now use WordPress `page_id` query semantics and Posts use `p`. That preserves the `is_page`/`is_single` distinction used by WordPress and condition systems while the plugin restores the prior global query state after the lookup.
+After a clean export, the modal closes and WordPress's compact `Snackbar` component confirms the download instead of leaving a large success Notice in the modal. Warnings and errors remain visible in the modal because they may require attention. The success snackbar is scoped and styled as a small WordPress/Material-inspired surface and uses polite live-region semantics.
+
+For Theme Builder condition evaluation, Pages use WordPress `page_id` query semantics and Posts use `p`. That preserves the `is_page`/`is_single` distinction used by WordPress and condition systems while the plugin restores the prior global query state after the lookup.
 
 The multi-document file uses the explicit bridge format `elementor-json-bridge/site-parts-bundle`. It is not claimed to be a native single-template Elementor Library import. The embedded document/header/footer values remain individual Elementor document wrappers.
 
@@ -113,7 +115,7 @@ WP-Cron is request-driven, so one minute is a target cadence rather than a hard 
 
 ## Runtime evidence and remaining boundary
 
-Version `0.3.1` keeps PHP 8.1-8.5 regression coverage, PHPCS/PHP compatibility, Composer audit, reproducible packaging and Plugin Check. Real `wp-env` acceptance covers:
+Version `0.3.2` keeps PHP 8.1-8.5 regression coverage, PHPCS/PHP compatibility, Composer audit, reproducible packaging and Plugin Check. Real `wp-env` acceptance covers:
 
 - Elementor document save/readback;
 - snapshot tamper rejection;
@@ -124,4 +126,4 @@ Version `0.3.1` keeps PHP 8.1-8.5 regression coverage, PHPCS/PHP compatibility, 
 
 Controlled Theme Builder coverage additionally proves that Page lookups use `page_id`, Post lookups use `p`, prior WordPress query globals are restored, and an Elementor Pro condition-resolution exception degrades to a source-only export warning. Controlled REST coverage verifies that unexpected exceptions do not leak their raw message to the client.
 
-Actual Elementor Pro Theme Builder condition matching cannot be proven by the public Core-only CI environment. The final modal appearance and keyboard/screen-reader behavior also require a browser check on a WordPress admin screen. Those are staging/browser gates rather than unresolved repository logic claims.
+Actual Elementor Pro Theme Builder condition matching cannot be proven by the public Core-only CI environment. The final modal/snackbar appearance and keyboard/screen-reader behavior also require a browser check on a WordPress admin screen. Those are staging/browser gates rather than unresolved repository logic claims.
