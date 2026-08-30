@@ -68,6 +68,40 @@ jobs:
           path: dist/elementor-json-bridge.zip
           if-no-files-found: error
 
+  runtime:
+    name: Runtime ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: WordPress 6.8.3 / PHP 8.1
+            config: .wp-env.6.8.json
+          - label: latest WordPress / PHP 8.3
+            config: .wp-env.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned wp-env
+        run: npm install --global @wordpress/env@11.14.0
+
+      - name: Start WordPress and Elementor
+        run: wp-env start --config="${{ matrix.config }}"
+
+      - name: Confirm real runtime
+        run: |
+          wp-env run cli wp core version
+          wp-env run cli wp plugin is-active elementor
+
+      - name: Elementor document save and readback
+        run: wp-env run cli wp eval-file wp-content/ejb-runtime-tests/elementor-documents-roundtrip.php
+
+      - name: Stop runtime
+        if: always()
+        run: wp-env stop --config="${{ matrix.config }}" || true
+
   plugin-check:
     name: Plugin Check private-release canary
     runs-on: ubuntu-latest
