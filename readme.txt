@@ -69,7 +69,7 @@ Clicking the action opens an accessible WordPress React modal built with WordPre
 
 The header/footer bundle is a transport format owned by Elementor JSON Bridge (`elementor-json-bridge/site-parts-bundle`). It is not claimed to be a native single-template Elementor Library import. The individual `document`, `header`, and `footer` values keep their Elementor document wrappers so they can be inspected or processed separately.
 
-The export route requires the plugin management capability plus `edit_post` for the selected document. The server independently restricts the feature to `page` and `post`, so a crafted request cannot use it to export Products.
+The export route requires the plugin management capability plus `edit_post` for the selected document. The server independently restricts the feature to `page` and `post`, so a crafted request cannot use it to export Products. Expected bridge validation errors return their stable administrator-facing message; unexpected PHP/Elementor failures return a generic server error instead of exposing raw exception details.
 
 == Repository layout ==
 
@@ -139,7 +139,7 @@ GitHub commit history is useful version history but is not treated as the only b
 
 == Runtime verification ==
 
-The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.3.1 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, and the graceful header/footer fallback when Elementor Pro is not installed. Controlled Theme Builder regressions additionally verify that Page context uses `page_id`, Post context uses `p`, globals are restored, and condition-resolution failures degrade to a source-only export warning.
+The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.3.1 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, and the graceful header/footer fallback when Elementor Pro is not installed. Controlled Theme Builder regressions additionally verify that Page context uses `page_id`, Post context uses `p`, globals are restored, and condition-resolution failures degrade to a source-only export warning. A controlled REST regression verifies that unexpected exceptions do not leak their raw message to the client.
 
 This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final modal appearance still require a staging/browser check on a site with Elementor Pro because the public CI runtime contains Elementor Core only.
 
@@ -164,7 +164,8 @@ GitHub authentication is always deleted on uninstall. Settings and snapshots are
 = 0.3.1 =
 * Fix Theme Builder condition context so Pages use WordPress `page_id` semantics while Posts use `p`, preserving the correct `is_page`/`is_single` condition state.
 * Keep the source Page/Post export available when Elementor Pro condition resolution throws, returning a stable warning instead of failing the whole download.
-* Add permanent controlled regressions for page/post query context, global-query restoration and the safe Pro-resolution fallback.
+* Normalize unexpected local-export REST exceptions to a stable generic HTTP 500 response instead of exposing raw internal exception details.
+* Add permanent controlled regressions for page/post query context, global-query restoration, safe Pro-resolution fallback and REST error normalization.
 
 = 0.3.0 =
 * Add `Export Elementor JSON` directly to Elementor-built Pages and Posts in the WordPress admin list while explicitly excluding Products.
