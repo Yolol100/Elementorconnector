@@ -158,8 +158,8 @@ $assert(($post_result['footer']['id'] ?? 0) === 92, 'Post context did not resolv
 $GLOBALS['ejb_site_parts_conditions']->throw = true;
 $fallback_result = $resolver->for_post(10);
 $assert(($fallback_result['supported'] ?? true) === false, 'Theme Builder failure did not enter the safe fallback state.');
-$assert(($fallback_result['header'] ?? 'unexpected') === null, 'Theme Builder failure unexpectedly returned a header.');
-$assert(($fallback_result['footer'] ?? 'unexpected') === null, 'Theme Builder failure unexpectedly returned a footer.');
+$assert(array_key_exists('header', $fallback_result) && $fallback_result['header'] === null, 'Theme Builder failure unexpectedly returned a header.');
+$assert(array_key_exists('footer', $fallback_result) && $fallback_result['footer'] === null, 'Theme Builder failure unexpectedly returned a footer.');
 $warnings = $fallback_result['warnings'] ?? [];
 $assert(is_array($warnings) && count($warnings) === 1, 'Theme Builder failure did not return one stable warning.');
 $assert(str_contains((string) $warnings[0], 'only the source document was exported'), 'Theme Builder failure warning did not explain the safe fallback.');
