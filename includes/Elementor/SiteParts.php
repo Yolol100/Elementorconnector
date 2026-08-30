@@ -100,7 +100,7 @@ final class SiteParts {
 			}
 
 			$payload = $this->documents->payload( $template_id );
-			if ( $location !== (string) ( $payload['type'] ?? '' ) ) {
+			if ( (string) ( $payload['type'] ?? '' ) !== $location ) {
 				continue;
 			}
 
