@@ -38,6 +38,8 @@ jobs:
           php tests/run.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
+          php tests/secretbox-invalid-packages.php
+          php tests/snapshot-integrity.php
 
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-lock
