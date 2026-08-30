@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/wp-env.json",
+  "core": "https://wordpress.org/wordpress-6.8.3.zip",
+  "phpVersion": "8.1",
+  "plugins": [
+    "https://downloads.wordpress.org/plugin/elementor.4.2.3.zip",
+    "."
+  ],
+  "mappings": {
+    "wp-content/ejb-runtime-tests": "./tests/runtime"
+  },
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_LOG": true,
+    "WP_DEBUG_DISPLAY": false
+  }
+}
