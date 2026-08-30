@@ -99,6 +99,67 @@ try {
         throw new RuntimeException('The server-side product export gate did not fail closed.');
     }
 
+    if (!class_exists('ElementorPro\\Modules\\ThemeBuilder\\Module', false)) {
+        final class EJB_Runtime_Theme_Conditions {
+            public array $observations = [];
+
+            public function get_documents_for_location(string $location): array {
+                $this->observations[] = [
+                    'location' => $location,
+                    'is_page' => is_page(),
+                    'is_single' => is_single(),
+                    'queried_id' => get_queried_object_id(),
+                ];
+                return [];
+            }
+        }
+
+        final class EJB_Runtime_Theme_Module {
+            public static function instance(): self {
+                static $instance;
+                return $instance ??= new self();
+            }
+
+            public function get_conditions_manager(): object {
+                return $GLOBALS['ejb_runtime_theme_conditions'];
+            }
+        }
+
+        class_alias(EJB_Runtime_Theme_Module::class, 'ElementorPro\\Modules\\ThemeBuilder\\Module');
+
+        $GLOBALS['ejb_runtime_theme_conditions'] = new EJB_Runtime_Theme_Conditions();
+        $site_parts = new SiteParts($documents);
+        $previous_post_global = $GLOBALS['post'] ?? null;
+        $previous_wp_query = $GLOBALS['wp_query'] ?? null;
+        $previous_wp_the_query = $GLOBALS['wp_the_query'] ?? null;
+
+        $site_parts->for_post($ids['page']);
+        $page_observations = array_slice($GLOBALS['ejb_runtime_theme_conditions']->observations, -2);
+        foreach ($page_observations as $observation) {
+            if (($observation['is_page'] ?? false) !== true || ($observation['is_single'] ?? true) !== false) {
+                throw new RuntimeException('Real WordPress page condition context did not expose is_page=true and is_single=false.');
+            }
+            if ((int) ($observation['queried_id'] ?? 0) !== $ids['page']) {
+                throw new RuntimeException('Real WordPress page condition context used the wrong queried object ID.');
+            }
+        }
+
+        $site_parts->for_post($ids['post']);
+        $post_observations = array_slice($GLOBALS['ejb_runtime_theme_conditions']->observations, -2);
+        foreach ($post_observations as $observation) {
+            if (($observation['is_page'] ?? true) !== false || ($observation['is_single'] ?? false) !== true) {
+                throw new RuntimeException('Real WordPress post condition context did not expose is_page=false and is_single=true.');
+            }
+            if ((int) ($observation['queried_id'] ?? 0) !== $ids['post']) {
+                throw new RuntimeException('Real WordPress post condition context used the wrong queried object ID.');
+            }
+        }
+
+        if (($GLOBALS['post'] ?? null) !== $previous_post_global || ($GLOBALS['wp_query'] ?? null) !== $previous_wp_query || ($GLOBALS['wp_the_query'] ?? null) !== $previous_wp_the_query) {
+            throw new RuntimeException('Theme Builder condition lookup did not restore the previous WordPress query globals.');
+        }
+    }
+
     echo wp_json_encode(
         [
             'status' => 'PASS',
@@ -111,6 +172,7 @@ try {
             'product_action' => false,
             'plain_page_json' => true,
             'site_parts_fallback_without_pro' => true,
+            'wordpress_page_post_condition_context' => true,
         ],
         JSON_UNESCAPED_SLASHES
     ) . PHP_EOL;
