@@ -38,8 +38,10 @@ jobs:
           php tests/run.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
-          php tests/secretbox-invalid-packages.php
-          php tests/snapshot-integrity.php
+          regression_status=0
+          php tests/secretbox-invalid-packages.php || regression_status=1
+          php tests/snapshot-integrity.php || regression_status=1
+          exit "$regression_status"
 
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-lock
