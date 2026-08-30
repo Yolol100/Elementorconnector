@@ -43,6 +43,7 @@ jobs:
           php tests/local-export.php
           php tests/site-parts.php
           php tests/local-export-controller.php
+          php tests/local-export-ui.php
           regression_status=0
           php tests/secretbox-invalid-packages.php || regression_status=1
           php tests/snapshot-integrity.php || regression_status=1
