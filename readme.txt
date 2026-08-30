@@ -4,15 +4,15 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.2.2
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Safely synchronize Elementor document JSON with a private GitHub repository.
+Safely synchronize and locally export Elementor document JSON.
 
 == Description ==
 
-Elementor JSON Bridge keeps Elementor page, post, and template JSON in GitHub so it can be reviewed and edited with tools such as ChatGPT or Codex without giving those tools direct WordPress access.
+Elementor JSON Bridge keeps Elementor page, post, and template JSON in GitHub so it can be reviewed and edited with tools such as ChatGPT or Codex without giving those tools direct WordPress access. It also adds a direct local JSON download action for Elementor-built Pages and Posts in the WordPress admin list.
 
 The plugin deliberately contains no OpenAI API integration and requires no MCP server. GitHub authentication uses GitHub Device Flow: the site stores only the public GitHub App Client ID in normal settings and encrypts the resulting user access and refresh tokens at rest.
 
@@ -28,6 +28,7 @@ Core safety rules:
 * A failed roundtrip triggers automatic rollback to the local snapshot.
 * Automatic remote apply is opt-in and disabled by default. When enabled, the plugin rechecks fresh GitHub/local state before applying.
 * Manual Apply GitHub remains available when automatic apply is disabled or a pending change needs review.
+* Local JSON download is available only for WordPress Pages and Posts that are editable Elementor documents; Products are rejected in both the admin UI and server-side export service.
 * GitHub tokens are never exposed to browser JavaScript or stored in logs.
 
 == GitHub App setup ==
@@ -55,6 +56,20 @@ The private repository itself is not created by this plugin. Create it first in 
 8. If verification fails, the integrity-checked snapshot is restored.
 
 Normal WordPress or Elementor saves can be exported automatically when Automatic export is enabled. An automatic export refuses to overwrite a GitHub file whose SHA no longer matches the known base.
+
+== Local page and post export ==
+
+Elementor-built Pages and Posts receive an `Export Elementor JSON` row action in their normal WordPress admin lists. WooCommerce Products and other post types do not receive this action.
+
+Clicking the action opens an accessible WordPress React modal built with WordPress Components. The modal offers an optional `Include header and footer` switch.
+
+* With the switch off, the browser downloads the current page or post using the bridge's normal Elementor document JSON wrapper.
+* With the switch on and Elementor Pro Theme Builder available, the plugin resolves the matching Theme Builder header and footer for the current document and downloads one bridge bundle JSON containing `document`, `header`, and `footer` entries plus small site-part metadata.
+* If Elementor Pro is not active, or no matching header/footer exists, the source document still downloads and the modal reports which requested site parts were unavailable.
+
+The header/footer bundle is a transport format owned by Elementor JSON Bridge (`elementor-json-bridge/site-parts-bundle`). It is not claimed to be a native single-template Elementor Library import. The individual `document`, `header`, and `footer` values keep their Elementor document wrappers so they can be inspected or processed separately.
+
+The export route requires the plugin management capability plus `edit_post` for the selected document. The server independently restricts the feature to `page` and `post`, so a crafted request cannot use it to export Products.
 
 == Repository layout ==
 
@@ -95,7 +110,7 @@ The plugin does not use inbound webhooks. The target poll cadence is about one m
 
 == Security ==
 
-Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions additionally require `edit_post` for that document. Automatic apply revalidates the recorded administrator's bridge capability and `edit_post` permission for each target before activating that user's context for the background write.
+Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions and local exports additionally require `edit_post` for that document. Automatic apply revalidates the recorded administrator's bridge capability and `edit_post` permission for each target before activating that user's context for the background write.
 
 Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization.
 
@@ -105,7 +120,7 @@ The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does
 
 == External service ==
 
-Elementor JSON Bridge uses GitHub as an external storage and version-control service only after an administrator explicitly configures and connects it.
+Elementor JSON Bridge uses GitHub as an external storage and version-control service only after an administrator explicitly configures and connects it. Local page/post JSON downloads do not require GitHub and do not modify GitHub synchronization state.
 
 Data sent to GitHub can include the selected repository owner/name/branch, Elementor document JSON, document IDs in file paths, commit messages, and the GitHub authorization requests needed for Device Flow and repository access. Elementor JSON can contain website content and references to site-specific data, so use a private repository and review what you synchronize.
 
@@ -124,19 +139,20 @@ GitHub commit history is useful version history but is not treated as the only b
 
 == Runtime verification ==
 
-The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.2.2 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, and a real `edit_post` denial path.
+The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.3.0 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3. The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, and the graceful header/footer fallback when Elementor Pro is not installed.
 
-This CI evidence validates those exact configurations. It does not replace a site-specific staging roundtrip for production websites with additional Elementor Pro features, widgets, add-ons, dynamic data, or hosting-specific behavior.
+This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final modal appearance still require a staging/browser check on a site with Elementor Pro because the public CI runtime contains Elementor Core only.
 
 == Limitations ==
 
-Version 0.2.x remains intentionally conservative:
+Version 0.3.x remains intentionally conservative:
 
 * Automatic apply is optional and disabled by default.
+* Local header/footer export requires Elementor Pro Theme Builder and a matching site-part condition; the bundle is not a native single-template Elementor import format.
 * The plugin performs structural validation and exact post-save roundtrip verification, but it cannot prove every widget, add-on, dynamic tag, Theme Builder condition, form action, or site-specific dependency is valid.
 * WP-Cron is request-driven and the one-minute polling cadence is not a real-time guarantee.
 * Production use should be verified on staging first, especially for Elementor Pro, Theme Builder, Loops, Forms, WooCommerce, Dynamic Tags, Components, and Atomic/V4 content.
-* The GitHub App must already exist and be installed on the selected repository.
+* The GitHub App must already exist and be installed on the selected repository for GitHub synchronization; local downloads work independently.
 * Single-repository mode is safe only when the repository is private; `site-sync` is the recommended data branch.
 
 == Uninstall ==
@@ -144,6 +160,14 @@ Version 0.2.x remains intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.3.0 =
+* Add `Export Elementor JSON` directly to Elementor-built Pages and Posts in the WordPress admin list while explicitly excluding Products.
+* Add a WordPress React modal with an optional header/footer switch, using WordPress Components with Material 3-inspired visual treatment.
+* Download a normal Elementor document JSON when site parts are not requested.
+* When requested, resolve matching Elementor Pro Theme Builder header/footer documents and package them with the source document in a documented bridge bundle JSON.
+* Keep local downloads separate from GitHub sync state and enforce both plugin capability and `edit_post` permission server-side.
+* Add controlled and real WordPress/Elementor runtime regressions for page/post export, product rejection, and the Elementor-Core-only site-part fallback.
 
 = 0.2.2 =
 * Fail closed on malformed encrypted credential packages by validating Sodium nonce and AES-GCM IV/tag structure before decryption.

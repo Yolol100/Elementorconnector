@@ -35,9 +35,12 @@ jobs:
       - name: Zero-dependency tests
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+          node --check assets/js/admin.js
+          node --check assets/js/local-export.js
           php tests/run.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
+          php tests/local-export.php
           regression_status=0
           php tests/secretbox-invalid-packages.php || regression_status=1
           php tests/snapshot-integrity.php || regression_status=1
@@ -102,6 +105,9 @@ jobs:
 
       - name: Elementor document save and readback
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-documents-roundtrip.php
+
+      - name: Page and post local JSON export
+        run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-local-export.php
 
       - name: Stop runtime
         if: always()
