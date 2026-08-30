@@ -2,6 +2,7 @@
 
 namespace Webactueel\ElementorJsonBridge\Admin;
 
+use RuntimeException;
 use Throwable;
 use Webactueel\ElementorJsonBridge\Elementor\LocalExport;
 use Webactueel\ElementorJsonBridge\Lifecycle\Hooks;
@@ -56,8 +57,10 @@ final class LocalExportController {
 		try {
 			$result = $this->exporter->export( $post_id, rest_sanitize_boolean( $request->get_param( 'include_site_parts' ) ) );
 			return new \WP_REST_Response( [ 'ok' => true ] + $result );
-		} catch ( Throwable $throwable ) {
-			return new \WP_Error( 'ejb_export_error', $throwable->getMessage(), [ 'status' => 400 ] );
+		} catch ( RuntimeException $exception ) {
+			return new \WP_Error( 'ejb_export_error', $exception->getMessage(), [ 'status' => 400 ] );
+		} catch ( Throwable ) {
+			return new \WP_Error( 'ejb_export_error', 'The Elementor JSON export could not be completed.', [ 'status' => 500 ] );
 		}
 	}
 }
