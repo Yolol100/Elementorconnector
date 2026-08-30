@@ -3,6 +3,7 @@
 namespace Webactueel\ElementorJsonBridge\Elementor;
 
 use RuntimeException;
+use Throwable;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -24,26 +25,33 @@ final class SiteParts {
 			];
 		}
 
-		$module = \ElementorPro\Modules\ThemeBuilder\Module::instance();
-		if ( ! is_object( $module ) || ! method_exists( $module, 'get_conditions_manager' ) ) {
-			return $this->unsupported_result();
+		try {
+			$module = \ElementorPro\Modules\ThemeBuilder\Module::instance();
+			if ( ! is_object( $module ) || ! method_exists( $module, 'get_conditions_manager' ) ) {
+				return $this->unsupported_result();
+			}
+
+			$conditions = $module->get_conditions_manager();
+			if ( ! is_object( $conditions ) || ! method_exists( $conditions, 'get_documents_for_location' ) ) {
+				return $this->unsupported_result();
+			}
+
+			$matches = $this->with_singular_query(
+				$source_post,
+				static fn (): array => [
+					'header' => $conditions->get_documents_for_location( 'header' ),
+					'footer' => $conditions->get_documents_for_location( 'footer' ),
+				]
+			);
+
+			$header = $this->first_site_part( $matches['header'] ?? [], 'header' );
+			$footer = $this->first_site_part( $matches['footer'] ?? [], 'footer' );
+		} catch ( Throwable ) {
+			return $this->unsupported_result(
+				'Elementor Pro Theme Builder could not resolve the matching header or footer for this document, so only the source document was exported.'
+			);
 		}
 
-		$conditions = $module->get_conditions_manager();
-		if ( ! is_object( $conditions ) || ! method_exists( $conditions, 'get_documents_for_location' ) ) {
-			return $this->unsupported_result();
-		}
-
-		$matches = $this->with_singular_query(
-			$source_post,
-			static fn (): array => [
-				'header' => $conditions->get_documents_for_location( 'header' ),
-				'footer' => $conditions->get_documents_for_location( 'footer' ),
-			]
-		);
-
-		$header   = $this->first_site_part( $matches['header'] ?? [], 'header' );
-		$footer   = $this->first_site_part( $matches['footer'] ?? [], 'footer' );
 		$warnings = [];
 
 		if ( null === $header ) {
@@ -61,12 +69,12 @@ final class SiteParts {
 		];
 	}
 
-	private function unsupported_result(): array {
+	private function unsupported_result( string $warning = 'The active Elementor Pro version does not expose the Theme Builder condition API required for site-part export.' ): array {
 		return [
 			'supported' => false,
 			'header'    => null,
 			'footer'    => null,
-			'warnings'  => [ 'The active Elementor Pro version does not expose the Theme Builder condition API required for site-part export.' ],
+			'warnings'  => [ $warning ],
 		];
 	}
 
@@ -120,16 +128,21 @@ final class SiteParts {
 		$previous_post      = $post ?? null;
 		$previous_query     = $wp_query ?? null;
 		$previous_the_query = $wp_the_query ?? null;
-		$query              = new \WP_Query(
-			[
-				'p'                   => (int) $source_post->ID,
-				'post_type'           => (string) $source_post->post_type,
-				'post_status'         => 'any',
-				'posts_per_page'      => 1,
-				'ignore_sticky_posts' => true,
-				'no_found_rows'       => true,
-			]
-		);
+		$query_args         = [
+			'post_type'           => (string) $source_post->post_type,
+			'post_status'         => 'any',
+			'posts_per_page'      => 1,
+			'ignore_sticky_posts' => true,
+			'no_found_rows'       => true,
+		];
+
+		if ( 'page' === (string) $source_post->post_type ) {
+			$query_args['page_id'] = (int) $source_post->ID;
+		} else {
+			$query_args['p'] = (int) $source_post->ID;
+		}
+
+		$query = new \WP_Query( $query_args );
 
 		if ( ! $query->have_posts() ) {
 			throw new RuntimeException( 'The document context could not be prepared for Theme Builder conditions.' );
