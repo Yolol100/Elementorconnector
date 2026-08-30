@@ -41,6 +41,7 @@ jobs:
           regression_status=0
           php tests/secretbox-invalid-packages.php || regression_status=1
           php tests/snapshot-integrity.php || regression_status=1
+          php tests/elementor-canonicalization.php || regression_status=1
           exit "$regression_status"
 
       - name: Validate Composer metadata
