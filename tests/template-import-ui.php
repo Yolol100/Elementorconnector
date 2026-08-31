@@ -41,7 +41,7 @@ $assert(str_contains($service, '$expected_target_id < 1 || (int) $target[\'id\']
 $assert(str_contains($service, "'post_status'  => 'draft'"), 'Unchecked import no longer creates a new Page/Post as a draft.');
 
 $assert(!str_contains($controller, '/template-import/targets'), 'The obsolete manual target-search REST route still exists.');
-$assert(str_contains($controller, "in_array( $value, [ 'page', 'post' ], true )"), 'The REST destination gate is not limited to Pages and Posts.');
+$assert(str_contains($controller, 'in_array( $value, [ \'page\', \'post\' ], true )'), 'The REST destination gate is not limited to Pages and Posts.');
 $assert(str_contains($controller, "'replace_existing'"), 'The REST execute route does not expose the replacement checkbox state.');
 $assert(str_contains($controller, "'expected_target_id'"), 'The REST execute route does not bind the analyzed target ID.');
 $assert(str_contains($controller, "current_user_can( Hooks::CAPABILITY )"), 'Page/Post import REST routes lost the bridge capability gate.');
