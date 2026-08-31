@@ -14,7 +14,7 @@ final class AutoApply {
 
 	public function __construct(
 		private readonly Manager $manager,
-		private readonly WordPressDocument $content
+		private readonly ?WordPressDocument $content = null
 	) {}
 
 	public function register(): void {
@@ -22,7 +22,7 @@ final class AutoApply {
 	}
 
 	public function apply_pending(): void {
-		if ( ! self::should_apply( Settings::get( 'auto_apply', 1 ), State::REMOTE_PENDING ) ) {
+		if ( ! self::should_apply( Settings::get( 'auto_apply', 0 ), State::REMOTE_PENDING ) ) {
 			return;
 		}
 		if ( ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
@@ -34,9 +34,10 @@ final class AutoApply {
 			return;
 		}
 
+		$post_types = $this->content ? $this->content->post_types() : array_values( get_post_types( [ 'show_ui' => true ], 'names' ) );
 		$ids = get_posts(
 			[
-				'post_type'      => $this->content->post_types(),
+				'post_type'      => $post_types,
 				'post_status'    => 'any',
 				'posts_per_page' => self::BATCH_SIZE,
 				'orderby'        => 'ID',
@@ -50,7 +51,7 @@ final class AutoApply {
 
 		foreach ( $ids as $id ) {
 			$id = (int) $id;
-			if ( ! $this->manager->is_enabled( $id ) || ! user_can( $actor_id, 'edit_post', $id ) ) {
+			if ( ! user_can( $actor_id, 'edit_post', $id ) ) {
 				continue;
 			}
 
@@ -58,7 +59,7 @@ final class AutoApply {
 			wp_set_current_user( $actor_id );
 			try {
 				$result = $this->manager->check_remote( $id );
-				if ( ! self::should_apply( Settings::get( 'auto_apply', 1 ), (string) ( $result['status'] ?? '' ) ) ) {
+				if ( ! self::should_apply( Settings::get( 'auto_apply', 0 ), (string) ( $result['status'] ?? '' ) ) ) {
 					continue;
 				}
 				$this->manager->apply_remote( $id );
