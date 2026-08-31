@@ -178,7 +178,7 @@ final class WordPressDocument {
 		}
 
 		foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $section ) {
-			if ( ! isset( $payload[ $section ] ) || ! is_array( $payload[ $section ] ) || array_is_list( $payload[ $section ] ) ) {
+			if ( ! array_key_exists( $section, $payload ) || ! is_array( $payload[ $section ] ) || ( [] !== $payload[ $section ] && array_is_list( $payload[ $section ] ) ) ) {
 				throw new RuntimeException( 'The WordPress content JSON contains an invalid metadata section.' );
 			}
 		}
@@ -336,7 +336,7 @@ final class WordPressDocument {
 			'path'      => $path,
 			'elementor' => $this->elementor->is_elementor_document( $post_id ),
 			'acf'       => function_exists( 'get_field_objects' ),
-			'yoast'     => class_exists( '\\WPSEO_Meta' ),
+			'yoast'     => class_exists( '\WPSEO_Meta' ),
 		];
 	}
 
@@ -382,7 +382,10 @@ final class WordPressDocument {
 			}
 			$ids = [];
 			foreach ( $slugs as $slug ) {
-				$term  = get_term_by( 'slug', $slug, (string) $taxonomy );
+				$term = get_term_by( 'slug', $slug, (string) $taxonomy );
+				if ( ! $term instanceof \WP_Term ) {
+					throw new RuntimeException( 'A requested taxonomy term no longer exists on this site.' );
+				}
 				$ids[] = (int) $term->term_id;
 			}
 			if ( is_wp_error( wp_set_object_terms( $post_id, $ids, (string) $taxonomy, false ) ) ) {
@@ -441,7 +444,7 @@ final class WordPressDocument {
 	}
 
 	private function yoast( int $post_id ): array {
-		if ( ! class_exists( '\\WPSEO_Meta' ) ) {
+		if ( ! class_exists( '\WPSEO_Meta' ) ) {
 			return [];
 		}
 		$result = [];
@@ -456,7 +459,7 @@ final class WordPressDocument {
 		if ( [] === $yoast ) {
 			return;
 		}
-		if ( ! class_exists( '\\WPSEO_Meta' ) ) {
+		if ( ! class_exists( '\WPSEO_Meta' ) ) {
 			throw new RuntimeException( 'Yoast SEO content is present but Yoast SEO is not active.' );
 		}
 		if ( array_diff( array_keys( $yoast ), self::YOAST_FIELDS ) ) {
