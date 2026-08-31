@@ -28,6 +28,8 @@ $assert(str_contains($content, 'get_registered_meta_keys(') && str_contains($con
 $assert(str_contains($content, "current_user_can( \$object->cap->assign_terms )"), 'Taxonomy writes are not permission-gated.');
 $assert(str_contains($content, "'post_status'  => 'draft'"), 'Create-content no longer forces new WordPress content to draft.');
 $assert(str_contains($content, "'elementor'       => null"), 'The generic envelope no longer distinguishes optional Elementor data.');
+$assert(str_contains($content, '! empty( $object->public )') && str_contains($content, '! empty( $object->publicly_queryable )'), 'Automatic discovery is not restricted to website-facing content types.');
+$assert(str_contains($content, 'EXPLICIT_CONTENT_POST_TYPES') && str_contains($content, "'elementor_library'"), 'Safe explicit editor/template content types are no longer preserved.');
 
 $assert(str_contains($manager, "'1' !== (string) get_post_meta( \$post_id, State::META_EXCLUDED, true )"), 'Managed content is no longer enabled automatically by default.');
 $assert(!str_contains($manager, "'meta_key'       => State::META_ENABLED"), 'Polling still depends on the old per-document enable metadata.');
