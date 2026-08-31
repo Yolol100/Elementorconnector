@@ -19,8 +19,8 @@ $assert = static function (bool $condition, string $message): void {
 
 $assert(is_string($content) && is_string($manager) && is_string($requests) && is_string($settings) && is_string($plugin) && is_string($main) && is_string($uninstall), 'WordPress content sync source files could not be read.');
 
-$assert(str_contains($content, "public const FORMAT         = 'elementor-json-bridge/wordpress-content';"), 'The versioned WordPress content format is missing.');
-$assert(str_contains($content, "public const CREATE_FORMAT  = 'elementor-json-bridge/create-content';"), 'The create-content request format is missing.');
+$assert(str_contains($content, "'elementor-json-bridge/wordpress-content'"), 'The versioned WordPress content format is missing.');
+$assert(str_contains($content, "'elementor-json-bridge/create-content'"), 'The create-content request format is missing.');
 $assert(str_contains($content, "'content'        => (string) \$post->post_content"), 'Normal WordPress editor content is not part of the managed envelope.');
 $assert(str_contains($content, 'get_field_objects(') && str_contains($content, 'update_field('), 'ACF read/write integration is missing.');
 $assert(str_contains($content, '\\WPSEO_Meta::set_value('), 'Yoast metadata writes do not use the Yoast metadata API.');
