@@ -123,7 +123,7 @@ try {
     }
 
     $before = $content->payload($page_id);
-    if (($before['elementor'] ?? 'missing') !== null) {
+    if (!array_key_exists('elementor', $before) || $before['elementor'] !== null) {
         throw new RuntimeException('A normal non-Elementor page was incorrectly exposed as Elementor content.');
     }
     if (($before['post']['content'] ?? '') !== '<!-- wp:paragraph --><p>Before</p><!-- /wp:paragraph -->') {
@@ -183,7 +183,7 @@ try {
         throw new RuntimeException('The create-content protocol did not create a safe WordPress draft.');
     }
     $created_payload = $content->payload($created_id);
-    if (($created_payload['elementor'] ?? 'missing') !== null || ($created_payload['post']['content'] ?? '') !== '<p>Created through the bridge request protocol.</p>') {
+    if (!array_key_exists('elementor', $created_payload) || $created_payload['elementor'] !== null || ($created_payload['post']['content'] ?? '') !== '<p>Created through the bridge request protocol.</p>') {
         throw new RuntimeException('The newly created normal draft did not roundtrip through the generic content adapter.');
     }
 
