@@ -38,7 +38,7 @@
 			try {
 				const data = await request('/auth/device/poll');
 				if (data.status === 'connected') {
-					showMessage('GitHub connected. Reloading…');
+					showMessage('GitHub connected. Automatic WordPress content sync is now active. Reloading…');
 					window.setTimeout(() => window.location.reload(), 700);
 					return;
 				}
@@ -91,8 +91,9 @@
 		button.addEventListener('click', async () => {
 			const id = button.dataset.id;
 			const action = button.dataset.action;
-			if (action === 'apply' && !window.confirm('Apply the GitHub JSON to this Elementor document? A local snapshot will be created first.')) return;
+			if (action === 'apply' && !window.confirm('Apply the GitHub version to this WordPress content item? A local snapshot will be created first.')) return;
 			if (action === 'reset' && !window.confirm('Reset the remembered synchronization base? This does not delete or overwrite any GitHub file.')) return;
+			if (action === 'toggle' && button.textContent.trim() === 'Exclude' && !window.confirm('Exclude this one content item from automatic synchronization?')) return;
 			button.disabled = true;
 			try {
 				await request(`/documents/${id}/${action}`);
