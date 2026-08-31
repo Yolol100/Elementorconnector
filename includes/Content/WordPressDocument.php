@@ -385,6 +385,7 @@ final class WordPressDocument {
 				if ( ! is_string( $slug ) || '' === $slug || ! get_term_by( 'slug', $slug, (string) $taxonomy ) instanceof \WP_Term ) {
 					throw new RuntimeException( 'A requested taxonomy term does not exist on this site.' );
 				}
+			}
 		}
 	}
 
