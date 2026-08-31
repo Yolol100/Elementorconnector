@@ -24,6 +24,14 @@ final class WordPressDocument {
 		'user_request',
 	];
 
+	private const EXPLICIT_CONTENT_POST_TYPES = [
+		'elementor_library',
+		'wp_block',
+		'wp_navigation',
+		'wp_template',
+		'wp_template_part',
+	];
+
 	private const YOAST_FIELDS = [
 		'focuskw',
 		'title',
@@ -59,6 +67,14 @@ final class WordPressDocument {
 			if ( in_array( $name, self::BLOCKED_POST_TYPES, true ) || ! is_object( $object ) || ! isset( $object->cap ) || empty( $object->cap->edit_posts ) ) {
 				continue;
 			}
+
+			$is_website_content = ! empty( $object->public )
+				|| ! empty( $object->publicly_queryable )
+				|| in_array( $name, self::EXPLICIT_CONTENT_POST_TYPES, true );
+			if ( ! $is_website_content ) {
+				continue;
+			}
+
 			$allowed[] = $name;
 		}
 		sort( $allowed, SORT_STRING );
@@ -369,7 +385,6 @@ final class WordPressDocument {
 				if ( ! is_string( $slug ) || '' === $slug || ! get_term_by( 'slug', $slug, (string) $taxonomy ) instanceof \WP_Term ) {
 					throw new RuntimeException( 'A requested taxonomy term does not exist on this site.' );
 				}
-			}
 		}
 	}
 
