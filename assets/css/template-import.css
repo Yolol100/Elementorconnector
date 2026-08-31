@@ -1,5 +1,9 @@
+.ejb-template-import-trigger {
+	margin-left: 6px;
+}
+
 .ejb-template-import-modal.components-modal__frame {
-	width: min(680px, calc(100vw - 32px));
+	width: min(640px, calc(100vw - 32px));
 	max-height: calc(100vh - 32px);
 	border-radius: 24px;
 	overflow: hidden;
@@ -34,7 +38,6 @@
 }
 
 .ejb-template-import-modal__intro,
-.ejb-template-import-action-help,
 .ejb-template-import-empty {
 	margin: 0;
 	font-size: 14px;
@@ -93,14 +96,8 @@
 	color: #50575e;
 }
 
-.ejb-template-import-loading--small {
-	margin-top: -4px;
-}
-
 .ejb-template-import-summary,
-.ejb-template-import-match,
-.ejb-template-import-target,
-.ejb-template-import-confirm {
+.ejb-template-import-replace {
 	border: 1px solid #dcdcde;
 	border-radius: 16px;
 	background: #fff;
@@ -129,25 +126,47 @@
 	color: #646970;
 }
 
-.ejb-template-import-match {
+.ejb-template-import-replace {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
+	flex-direction: column;
+	gap: 14px;
 	padding: 16px 18px;
 	background: #f0f6fc;
 	border-color: #c5d9ed;
+	transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.ejb-template-import-match__copy {
+.ejb-template-import-replace.is-selected {
+	background: #fcf0f1;
+	border-color: #e5b8bd;
+}
+
+.ejb-template-import-replace__match {
 	display: flex;
 	min-width: 0;
 	flex-direction: column;
 	gap: 4px;
 }
 
-.ejb-template-import-match__copy strong {
+.ejb-template-import-replace__match strong {
 	overflow-wrap: anywhere;
+}
+
+.ejb-template-import-replace .components-base-control__field {
+	margin-bottom: 0;
+}
+
+.ejb-template-import-replace .components-base-control__help {
+	margin-top: 5px;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.ejb-template-import-empty {
+	padding: 14px 16px;
+	border: 1px solid #dcdcde;
+	border-radius: 14px;
+	background: #f6f7f7;
 }
 
 .ejb-template-import-notice {
@@ -168,72 +187,12 @@
 	list-style: disc;
 }
 
-.ejb-template-import-actions-choice {
-	padding: 16px 18px 8px;
-	border: 1px solid #dcdcde;
-	border-radius: 16px;
-	background: #f6f7f7;
-}
-
-.ejb-template-import-actions-choice .components-base-control__label {
-	margin-bottom: 10px;
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.ejb-template-import-actions-choice .components-radio-control__option {
-	margin-bottom: 10px;
-}
-
-.ejb-template-import-action-help {
-	margin-top: -10px;
-	padding: 0 2px;
-}
-
-.ejb-template-import-target {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	padding: 16px 18px;
-}
-
-.ejb-template-import-target .components-base-control__field,
-.ejb-template-import-confirm .components-base-control__field {
-	margin-bottom: 0;
-}
-
-.ejb-template-import-target__results {
-	max-height: 210px;
-	overflow: auto;
-	padding: 10px 12px;
-	border: 1px solid #dcdcde;
-	border-radius: 12px;
-	background: #f6f7f7;
-}
-
-.ejb-template-import-target__results .components-radio-control__option {
-	margin-bottom: 8px;
-}
-
-.ejb-template-import-target__results .components-radio-control__option:last-child {
-	margin-bottom: 0;
-}
-
-.ejb-template-import-confirm {
-	padding: 14px 16px;
-	background: #fcf0f1;
-	border-color: #e5b8bd;
-}
-
 .ejb-template-import-modal__actions {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 10px;
 	padding-top: 2px;
-}
-
-.ejb-template-import-modal__actions-spacer {
-	flex: 1 1 auto;
 }
 
 .ejb-template-import-modal__actions .components-button {
@@ -266,6 +225,12 @@
 	line-height: 1.4;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	.ejb-template-import-replace {
+		transition: none;
+	}
+}
+
 @media (max-width: 680px) {
 	.ejb-template-import-modal.components-modal__frame {
 		width: calc(100vw - 16px);
@@ -277,8 +242,7 @@
 		padding: 20px;
 	}
 
-	.ejb-template-import-file,
-	.ejb-template-import-match {
+	.ejb-template-import-file {
 		align-items: stretch;
 		flex-direction: column;
 	}
@@ -287,17 +251,9 @@
 		flex-wrap: wrap;
 	}
 
-	.ejb-template-import-modal__actions-spacer {
-		display: none;
-	}
-
 	.ejb-template-import-modal__actions .components-button {
 		justify-content: center;
 		flex: 1 1 calc(50% - 5px);
-	}
-
-	.ejb-template-import-modal__actions .components-button:first-child {
-		flex-basis: 100%;
 	}
 
 	.ejb-template-import-toast.components-snackbar,
@@ -314,9 +270,8 @@
 @media (forced-colors: active) {
 	.ejb-template-import-file,
 	.ejb-template-import-summary,
-	.ejb-template-import-match,
-	.ejb-template-import-target,
-	.ejb-template-import-confirm,
+	.ejb-template-import-replace,
+	.ejb-template-import-empty,
 	.ejb-template-import-toast.components-snackbar,
 	.ejb-template-import-toast--fallback {
 		border: 1px solid CanvasText;

@@ -4,6 +4,7 @@ use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Elementor\TemplateImporter;
+use Webactueel\ElementorJsonBridge\Sync\Lock;
 
 if (!defined('ABSPATH')) {
     throw new RuntimeException('WordPress was not bootstrapped.');
@@ -12,7 +13,7 @@ if (!class_exists('Elementor\\Plugin') || !defined('ELEMENTOR_VERSION')) {
     throw new RuntimeException('Elementor is not active in the runtime environment.');
 }
 if (!defined('EJB_VERSION') || !class_exists(TemplateImporter::class)) {
-    throw new RuntimeException('Elementor JSON Bridge smart template import is not active in the runtime environment.');
+    throw new RuntimeException('Elementor JSON Bridge Page/Post import is not active in the runtime environment.');
 }
 
 $admin = get_user_by('login', 'admin');
@@ -35,27 +36,45 @@ try {
         [
             'post_type' => 'page',
             'post_status' => 'publish',
-            'post_title' => 'EJB Smart Import Target',
-            'post_name' => 'ejb-smart-import-target',
+            'post_title' => 'EJB Overview Import Target',
+            'post_name' => 'ejb-overview-import-target',
             'post_content' => '',
         ],
         true
     );
     if (is_wp_error($page_id)) {
-        throw new RuntimeException('Unable to create the smart import target page.');
+        throw new RuntimeException('Unable to create the Page import target.');
     }
     $page_id = (int) $page_id;
     $created_ids[] = $page_id;
     update_post_meta($page_id, '_elementor_edit_mode', 'builder');
 
+    $post_id = wp_insert_post(
+        [
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'post_title' => 'EJB Overview Import Target',
+            'post_name' => 'ejb-overview-import-post-target',
+            'post_content' => '',
+        ],
+        true
+    );
+    if (is_wp_error($post_id)) {
+        throw new RuntimeException('Unable to create the Post import target.');
+    }
+    $post_id = (int) $post_id;
+    $created_ids[] = $post_id;
+    update_post_meta($post_id, '_elementor_edit_mode', 'builder');
+
     $documents = new Documents();
     $validator = new PayloadValidator();
     $snapshots = new Snapshots();
-    $importer = new TemplateImporter($documents, $validator, $snapshots);
+    $lock = new Lock();
+    $importer = new TemplateImporter($documents, $validator, $snapshots, $lock);
 
-    $document_type = $documents->document_type($page_id);
-    $base = $validator->validate_array($documents->payload($page_id), $document_type);
-    $base['content'] = [
+    $page_type = $documents->document_type($page_id);
+    $page_base = $validator->validate_array($documents->payload($page_id), $page_type);
+    $page_base['content'] = [
         [
             'id' => 'ejbbase1',
             'elType' => 'container',
@@ -63,10 +82,23 @@ try {
             'elements' => [],
         ],
     ];
-    $base = $validator->validate_array($base, $document_type);
-    $documents->save_payload($page_id, $base);
+    $page_base = $validator->validate_array($page_base, $page_type);
+    $documents->save_payload($page_id, $page_base);
 
-    $incoming = $base;
+    $post_type = $documents->document_type($post_id);
+    $post_base = $validator->validate_array($documents->payload($post_id), $post_type);
+    $post_base['content'] = [
+        [
+            'id' => 'ejbpost1',
+            'elType' => 'container',
+            'settings' => [],
+            'elements' => [],
+        ],
+    ];
+    $post_base = $validator->validate_array($post_base, $post_type);
+    $documents->save_payload($post_id, $post_base);
+
+    $incoming = $page_base;
     $incoming['content'] = [
         [
             'id' => 'ejbimport1',
@@ -75,92 +107,123 @@ try {
             'elements' => [],
         ],
     ];
-    $incoming = $validator->validate_array($incoming, $document_type);
+    $incoming = $validator->validate_array($incoming, $page_type);
     $json = wp_json_encode($incoming, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($json)) {
-        throw new RuntimeException('Unable to encode the smart import runtime fixture.');
+        throw new RuntimeException('Unable to encode the Page/Post import runtime fixture.');
     }
 
-    $analysis = $importer->analyze($json, 'ejb-smart-import-target-elementor.json');
-    if ((int) ($analysis['recognized_target']['id'] ?? 0) !== $page_id) {
-        throw new RuntimeException('Smart import did not recognize the exact Page export filename/title target.');
+    $filename = 'ejb-overview-import-target-elementor.json';
+    $page_analysis = $importer->analyze($json, $filename, 'page');
+    if ((int) ($page_analysis['recognized_target']['id'] ?? 0) !== $page_id) {
+        throw new RuntimeException('Page overview analysis did not recognize the exact Page target.');
     }
-    if (($analysis['recognition']['confidence'] ?? '') !== 'high') {
-        throw new RuntimeException('Exact Page export recognition was not classified as a strong match.');
+    if (($page_analysis['recognition']['confidence'] ?? '') !== 'high') {
+        throw new RuntimeException('Exact Page slug/title recognition was not classified as a strong match.');
     }
 
-    $replace = $importer->execute($json, 'ejb-smart-import-target-elementor.json', 'replace', $page_id);
+    $post_analysis = $importer->analyze($json, $filename, 'post');
+    if ((int) ($post_analysis['recognized_target']['id'] ?? 0) !== $post_id) {
+        throw new RuntimeException('Post overview analysis did not stay inside the Post destination.');
+    }
+    if (($post_analysis['recognition']['confidence'] ?? '') !== 'medium') {
+        throw new RuntimeException('Unique exact-title Post recognition was not classified correctly.');
+    }
+
+    $held_token = $lock->acquire($page_id);
+    $concurrent_rejected = false;
+    try {
+        $importer->execute($json, $filename, 'page', true, $page_id);
+    } catch (RuntimeException $exception) {
+        $concurrent_rejected = str_contains($exception->getMessage(), 'already being synchronized');
+    } finally {
+        $lock->release($page_id, $held_token);
+    }
+    if (!$concurrent_rejected) {
+        throw new RuntimeException('Page replacement ignored the shared synchronization lock.');
+    }
+
+    $stale_target_rejected = false;
+    try {
+        $importer->execute($json, $filename, 'page', true, $post_id);
+    } catch (RuntimeException) {
+        $stale_target_rejected = true;
+    }
+    if (!$stale_target_rejected) {
+        throw new RuntimeException('Page replacement accepted a target ID that did not match fresh recognition.');
+    }
+
+    $replace = $importer->execute($json, $filename, 'page', true, $page_id);
     if (($replace['action'] ?? '') !== 'replaced' || (int) ($replace['snapshot_id'] ?? 0) < 1) {
-        throw new RuntimeException('Smart replacement did not create a rollback snapshot.');
+        throw new RuntimeException('Checked replacement did not create a rollback snapshot.');
     }
-    $saved = $validator->validate_array($documents->payload($page_id), $document_type);
+    $saved = $validator->validate_array($documents->payload($page_id), $page_type);
     if (($saved['content'][0]['id'] ?? '') !== 'ejbimport1') {
-        throw new RuntimeException('Smart replacement did not persist the imported Elementor content.');
+        throw new RuntimeException('Checked replacement did not persist the imported Elementor content.');
     }
-    if ((string) get_post($page_id)->post_title !== 'EJB Smart Import Target') {
-        throw new RuntimeException('Smart replacement unexpectedly changed the existing WordPress title.');
+    if ('' !== (string) get_post_meta($page_id, '_ejb_lock', true)) {
+        throw new RuntimeException('Page replacement left the shared document lock behind.');
     }
 
-    $new_page = $importer->execute($json, 'ejb-smart-import-target-elementor.json', 'new_page');
+    $new_page = $importer->execute($json, $filename, 'page', false, 0);
     $new_page_id = (int) ($new_page['id'] ?? 0);
     $created_ids[] = $new_page_id;
     $new_page_post = get_post($new_page_id);
     if (!$new_page_post instanceof WP_Post || 'page' !== $new_page_post->post_type || 'draft' !== $new_page_post->post_status) {
-        throw new RuntimeException('Smart import did not create the new Page as a draft.');
+        throw new RuntimeException('Unchecked Page import did not create a new Page draft.');
     }
 
-    $new_post = $importer->execute($json, 'ejb-smart-import-target-elementor.json', 'new_post');
+    $new_post = $importer->execute($json, $filename, 'post', false, 0);
     $new_post_id = (int) ($new_post['id'] ?? 0);
     $created_ids[] = $new_post_id;
     $new_post_post = get_post($new_post_id);
     if (!$new_post_post instanceof WP_Post || 'post' !== $new_post_post->post_type || 'draft' !== $new_post_post->post_status) {
-        throw new RuntimeException('Smart import did not create the new Post as a draft.');
+        throw new RuntimeException('Unchecked Post import did not create a new Post draft.');
     }
 
-    $new_template = $importer->execute($json, 'ejb-smart-import-target-elementor.json', 'new_template');
-    $template_id = (int) ($new_template['id'] ?? 0);
-    $created_ids[] = $template_id;
-    $template_post = get_post($template_id);
-    if (!$template_post instanceof WP_Post || 'elementor_library' !== $template_post->post_type) {
-        throw new RuntimeException('Smart import did not create a native Elementor Template.');
+    $invalid_destination_rejected = false;
+    try {
+        $importer->analyze($json, $filename, 'product');
+    } catch (RuntimeException) {
+        $invalid_destination_rejected = true;
+    }
+    if (!$invalid_destination_rejected) {
+        throw new RuntimeException('Page/Post import accepted Product as a destination.');
     }
 
-    $product_id = wp_insert_post(
+    $header_data = json_decode($json, true);
+    $header_data['type'] = 'header';
+    $header_json = wp_json_encode($header_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $specialized_type_rejected = false;
+    try {
+        $importer->analyze($header_json, 'header.json', 'page');
+    } catch (RuntimeException) {
+        $specialized_type_rejected = true;
+    }
+    if (!$specialized_type_rejected) {
+        throw new RuntimeException('Page overview accepted a specialized non-Page Elementor template type.');
+    }
+
+    $duplicate_page_id = wp_insert_post(
         [
-            'post_type' => 'product',
-            'post_status' => 'publish',
-            'post_title' => 'EJB Smart Import Product',
+            'post_type' => 'page',
+            'post_status' => 'draft',
+            'post_title' => 'EJB Overview Import Target',
+            'post_name' => 'ejb-overview-import-duplicate',
+            'post_content' => '',
         ],
         true
     );
-    if (is_wp_error($product_id)) {
-        throw new RuntimeException('Unable to create the smart import product exclusion fixture.');
+    if (is_wp_error($duplicate_page_id)) {
+        throw new RuntimeException('Unable to create the ambiguous Page fixture.');
     }
-    $product_id = (int) $product_id;
-    $created_ids[] = $product_id;
-    update_post_meta($product_id, '_elementor_edit_mode', 'builder');
+    $duplicate_page_id = (int) $duplicate_page_id;
+    $created_ids[] = $duplicate_page_id;
+    update_post_meta($duplicate_page_id, '_elementor_edit_mode', 'builder');
 
-    $product_rejected = false;
-    try {
-        $importer->execute($json, 'ejb-smart-import-target-elementor.json', 'replace', $product_id);
-    } catch (RuntimeException) {
-        $product_rejected = true;
-    }
-    if (!$product_rejected) {
-        throw new RuntimeException('Smart import allowed a Product to become a replacement target.');
-    }
-
-    $header_json = json_decode($json, true);
-    $header_json['type'] = 'header';
-    $header_json = wp_json_encode($header_json, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    $incompatible_rejected = false;
-    try {
-        $importer->execute($header_json, 'header.json', 'replace', $page_id);
-    } catch (RuntimeException) {
-        $incompatible_rejected = true;
-    }
-    if (!$incompatible_rejected) {
-        throw new RuntimeException('Smart import allowed a header-type JSON to replace a normal Page.');
+    $ambiguous = $importer->analyze($json, 'generic-template.json', 'page');
+    if (null !== ($ambiguous['recognized_target'] ?? null)) {
+        throw new RuntimeException('Ambiguous exact-title Pages were not handled fail-closed.');
     }
 
     echo wp_json_encode(
@@ -170,14 +233,17 @@ try {
             'php' => PHP_VERSION,
             'elementor' => ELEMENTOR_VERSION,
             'bridge' => EJB_VERSION,
-            'recognized_existing_page' => true,
+            'page_destination_recognition' => true,
+            'post_destination_recognition' => true,
+            'shared_lock_rejection' => true,
+            'stale_target_rejection' => true,
             'replacement_snapshot' => true,
             'replacement_readback' => true,
-            'new_page_draft' => true,
-            'new_post_draft' => true,
-            'new_native_template' => true,
-            'product_rejected' => true,
-            'incompatible_type_rejected' => true,
+            'unchecked_new_page_draft' => true,
+            'unchecked_new_post_draft' => true,
+            'product_destination_rejected' => true,
+            'specialized_type_rejected' => true,
+            'ambiguous_match_rejected' => true,
         ],
         JSON_UNESCAPED_SLASHES
     ) . PHP_EOL;

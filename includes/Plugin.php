@@ -38,9 +38,10 @@ final class Plugin {
 		$documents         = new Documents();
 		$validator         = new PayloadValidator();
 		$snapshots         = new Snapshots();
-		$sync              = new Manager( $documents, $validator, $github, $snapshots, new Lock() );
+		$lock              = new Lock();
+		$sync              = new Manager( $documents, $validator, $github, $snapshots, $lock );
 		$local_export      = new LocalExport( $documents, new SiteParts( $documents ) );
-		$template_importer = new TemplateImporter( $documents, $validator, $snapshots );
+		$template_importer = new TemplateImporter( $documents, $validator, $snapshots, $lock );
 
 		add_action( 'init', [ $snapshots, 'register' ] );
 		( new AdminPage( $auth, $documents, $sync, $snapshots ) )->register();

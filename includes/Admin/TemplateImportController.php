@@ -27,27 +27,12 @@ final class TemplateImportController {
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => [ $this, 'analyze' ],
 				'permission_callback' => [ $this, 'permission' ],
-			]
-		);
-
-		register_rest_route(
-			self::NS,
-			'/template-import/targets',
-			[
-				'methods'             => \WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'targets' ],
-				'permission_callback' => [ $this, 'permission' ],
 				'args'                => [
-					'search'      => [
-						'type'              => 'string',
-						'default'           => '',
-						'sanitize_callback' => 'sanitize_text_field',
-					],
-					'source_type' => [
+					'destination' => [
 						'type'              => 'string',
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_key',
-						'validate_callback' => [ $this, 'validate_document_type' ],
+						'validate_callback' => [ $this, 'validate_destination' ],
 					],
 				],
 			]
@@ -61,13 +46,18 @@ final class TemplateImportController {
 				'callback'            => [ $this, 'execute' ],
 				'permission_callback' => [ $this, 'permission' ],
 				'args'                => [
-					'import_action' => [
+					'destination'        => [
 						'type'              => 'string',
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_key',
-						'validate_callback' => static fn ( mixed $value ): bool => in_array( $value, [ 'replace', 'new_page', 'new_post', 'new_template' ], true ),
+						'validate_callback' => [ $this, 'validate_destination' ],
 					],
-					'target_id'     => [
+					'replace_existing'   => [
+						'type'              => 'boolean',
+						'default'           => false,
+						'sanitize_callback' => 'rest_sanitize_boolean',
+					],
+					'expected_target_id' => [
 						'type'              => 'integer',
 						'default'           => 0,
 						'sanitize_callback' => 'absint',
@@ -81,14 +71,15 @@ final class TemplateImportController {
 		return current_user_can( Hooks::CAPABILITY );
 	}
 
-	public function validate_document_type( mixed $value ): bool {
-		return is_string( $value ) && 1 === preg_match( '/^[A-Za-z0-9_-]{1,80}$/D', $value );
+	public function validate_destination( mixed $value ): bool {
+		return is_string( $value ) && in_array( $value, [ 'page', 'post' ], true );
 	}
 
 	public function analyze( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
-			$file   = $this->json_file( $request );
-			$result = $this->importer->analyze( $file['json'], $file['name'] );
+			$file        = $this->json_file( $request );
+			$destination = sanitize_key( (string) $request->get_param( 'destination' ) );
+			$result      = $this->importer->analyze( $file['json'], $file['name'], $destination );
 			return new \WP_REST_Response( [ 'ok' => true ] + $result );
 		} catch ( RuntimeException $exception ) {
 			return new \WP_Error( 'ejb_template_import_invalid', $exception->getMessage(), [ 'status' => 400 ] );
@@ -97,24 +88,19 @@ final class TemplateImportController {
 		}
 	}
 
-	public function targets( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
-		try {
-			$targets = $this->importer->search_targets(
-				(string) $request->get_param( 'search' ),
-				(string) $request->get_param( 'source_type' )
-			);
-			return new \WP_REST_Response( [ 'ok' => true, 'targets' => $targets ] );
-		} catch ( Throwable ) {
-			return new \WP_Error( 'ejb_template_targets_error', 'Compatible Elementor import targets could not be loaded.', [ 'status' => 500 ] );
-		}
-	}
-
 	public function execute( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
-			$file   = $this->json_file( $request );
-			$action = sanitize_key( (string) $request->get_param( 'import_action' ) );
-			$target = absint( $request->get_param( 'target_id' ) );
-			$result = $this->importer->execute( $file['json'], $file['name'], $action, $target );
+			$file               = $this->json_file( $request );
+			$destination        = sanitize_key( (string) $request->get_param( 'destination' ) );
+			$replace_existing   = rest_sanitize_boolean( $request->get_param( 'replace_existing' ) );
+			$expected_target_id = absint( $request->get_param( 'expected_target_id' ) );
+			$result             = $this->importer->execute(
+				$file['json'],
+				$file['name'],
+				$destination,
+				$replace_existing,
+				$expected_target_id
+			);
 			return new \WP_REST_Response( [ 'ok' => true, 'result' => $result ] );
 		} catch ( RuntimeException $exception ) {
 			return new \WP_Error( 'ejb_template_import_failed', $exception->getMessage(), [ 'status' => 400 ] );
@@ -137,7 +123,7 @@ final class TemplateImportController {
 
 		$name = sanitize_file_name( (string) ( $file['name'] ?? '' ) );
 		if ( 'json' !== strtolower( pathinfo( $name, PATHINFO_EXTENSION ) ) ) {
-			throw new RuntimeException( 'Smart import accepts one .json file. Use standard Elementor import for ZIP archives.' );
+			throw new RuntimeException( 'Page/Post import accepts one .json file. Use Elementor Templates for ZIP archives and other template imports.' );
 		}
 
 		$tmp_name = (string) ( $file['tmp_name'] ?? '' );

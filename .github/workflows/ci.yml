@@ -114,7 +114,7 @@ jobs:
       - name: Page and post local JSON export
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-local-export.php
 
-      - name: Smart template JSON import
+      - name: Page and post template JSON import
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-template-import.php
 
       - name: Stop runtime

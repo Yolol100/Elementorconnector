@@ -4,7 +4,7 @@ Tags: elementor, json, github, backup, version control
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ Safely synchronize, export, and re-import Elementor document JSON.
 
 == Description ==
 
-Elementor JSON Bridge keeps Elementor page, post, and template JSON in GitHub so it can be reviewed and edited with tools such as ChatGPT or Codex without giving those tools direct WordPress access. It also adds direct local JSON download for Elementor-built Pages and Posts plus a guarded smart re-import layer on Elementor's Saved Templates import action.
+Elementor JSON Bridge keeps Elementor page, post, and template JSON in GitHub so it can be reviewed and edited with tools such as ChatGPT or Codex without giving those tools direct WordPress access. It also adds direct local JSON download plus a guarded Page/Post JSON import flow to the normal WordPress Pages and Posts overviews.
 
 The plugin deliberately contains no OpenAI API integration and requires no MCP server. GitHub authentication uses GitHub Device Flow: the site stores only the public GitHub App Client ID in normal settings and encrypts the resulting user access and refresh tokens at rest.
 
@@ -22,7 +22,7 @@ Core safety rules:
 * Existing GitHub files with unknown history are never overwritten.
 * A SHA-256 base fingerprint detects simultaneous local and remote changes.
 * Every remote apply creates a local WordPress snapshot first.
-* Smart JSON replacement also creates a local integrity-checked snapshot before touching the selected Page, Post, or Template.
+* Checked Page/Post JSON replacement creates a local integrity-checked snapshot before touching the detected existing item.
 * Rollback snapshots are integrity-checked against their stored SHA-256 fingerprint before use.
 * Incoming JSON is structurally validated and canonicalized to Elementor's raw-data defaults before save.
 * The saved document is read back and fingerprinted after save.
@@ -30,7 +30,10 @@ Core safety rules:
 * Automatic remote apply is opt-in and disabled by default. When enabled, the plugin rechecks fresh GitHub/local state before applying.
 * Manual Apply GitHub remains available when automatic apply is disabled or a pending change needs review.
 * Local JSON download is available only for WordPress Pages and Posts that are editable Elementor documents; Products are rejected in both the admin UI and server-side export service.
-* Smart import replacement targets are limited to Pages, Posts, and Elementor Templates; Products are excluded server-side.
+* Page/Post JSON import is limited to the current Pages or Posts overview. Products and Elementor Library templates are not replacement targets.
+* Replacement is opt-in through one checkbox. If the checkbox stays off, a new draft is created instead.
+* Local replacement and GitHub synchronization use the same per-document lock so they cannot write the same Elementor document concurrently.
+* Elementor's existing Saved Templates import button remains native and untouched.
 * GitHub tokens are never exposed to browser JavaScript or stored in logs.
 
 == GitHub App setup ==
@@ -75,28 +78,30 @@ The header/footer bundle is a transport format owned by Elementor JSON Bridge (`
 
 The export route requires the plugin management capability plus `edit_post` for the selected document. The server independently restricts the feature to `page` and `post`, so a crafted request cannot use it to export Products. Expected bridge validation errors return their stable administrator-facing message; unexpected PHP/Elementor failures return a generic server error instead of exposing raw exception details.
 
-== Smart Elementor JSON re-import ==
+== Page and post Elementor JSON import ==
 
-On Elementor -> Templates / Saved Templates, clicking Elementor's normal Import Templates action opens the bridge's WordPress React smart-import modal first. The styling follows the same WordPress Components plus Material-inspired visual language as the local export modal.
+The normal WordPress Pages and Posts overviews each receive an `Import Elementor template` button. Elementor -> Templates / Saved Templates keeps Elementor's existing Import Templates button and native behavior; the bridge no longer intercepts that screen.
 
-Smart import accepts one JSON file up to 5 MB. ZIP remains available through the `Use standard Elementor import` fallback.
+Page/Post import accepts one JSON file up to 5 MB. The custom flow accepts Page-style source types (`page`, `wp-page`, `wp-post`). ZIP files and specialized template types such as headers and footers stay with Elementor's native Templates import.
 
-The modal analyzes the JSON before any write and offers these choices:
+The modal analyzes the JSON before any write and searches only inside the current overview:
 
-* Replace an existing Elementor Page, Post, or compatible Template.
-* Create a new WordPress Page as a draft.
-* Create a new WordPress Post as a draft.
-* Create a new Elementor Template through Elementor's own local template importer.
+* On Pages, only editable Elementor Pages can be recognized.
+* On Posts, only editable Elementor Posts can be recognized.
+* Explicit bridge source metadata and an exact bridge slug/title can produce a strong match.
+* Otherwise exactly one same-type exact-title item may be proposed.
+* Multiple matches, incompatible items and missing matches are not assigned automatically.
 
-Products are never offered as replacement targets and are rejected server-side.
+When one existing item is recognized, the modal shows a single replacement checkbox.
 
-Recognition is conservative. The bridge proposes an existing target only when it has deterministic evidence: explicit bridge source metadata, a native Elementor export filename whose template ID and title still agree, an exact bridge Page/Post slug plus title, or one unique compatible exact-title match. It does not fuzzy-match or silently choose among ambiguous results. Creating a new Template is the default action; replacement is never the default destructive choice.
+* Checkbox off: leave the detected item unchanged and create a new Page/Post as a draft.
+* Checkbox on: replace the detected item with the imported Elementor content and page settings.
 
-Before replacement the administrator must explicitly select the target and confirm the destructive action. The existing WordPress title is preserved. The bridge snapshots the current Elementor payload, applies the imported content and page settings through Elementor's document API, reads the document back and verifies the exact canonical fingerprint. If apply/readback fails, it restores the integrity-checked snapshot and verifies the rollback before reporting failure.
+The checkbox is also the destructive confirmation. Before replacement, the server repeats recognition and requires the detected ID to match the ID reviewed in the modal. The existing WordPress title is preserved. Replacement acquires the same document lock used by GitHub synchronization, creates an integrity-checked snapshot, applies content through Elementor's document API, reads the document back and verifies its canonical fingerprint. If apply/readback fails, the snapshot is restored and the rollback fingerprint is verified before failure is returned.
 
-Page-style JSON (`page`, `wp-page`, `wp-post`) can create or replace normal Pages and Posts. Other Elementor document types can replace only a compatible Elementor Template. Creating a new Template delegates to Elementor's native local importer; bridge Page/Post JSON is mapped to Elementor's normal `page` template type for that create-new operation.
+Products and Elementor Library templates cannot become replacement destinations through this custom flow.
 
-Current native Elementor exports can carry `global_classes` and `global_variables`. The smart Page/Post replacement path keeps references inside the document but does not claim to import missing global definitions into a different site. When those fields are present, the modal warns the administrator to use standard Elementor import for cross-site migration. Smart re-import is primarily a same-site controlled replacement flow.
+Current native Elementor exports can carry `global_classes` and `global_variables`. Page/Post import keeps references inside the document but does not claim to import missing global definitions into a different site. When those fields are present, the modal warns the administrator to use Elementor's existing Templates import for cross-site/template migration.
 
 == Repository layout ==
 
@@ -111,7 +116,7 @@ Each file uses Elementor's documented document wrapper:
 
 `title`, `type`, `version`, `page_settings`, `content`.
 
-The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. Before hashing or saving, the bridge normalizes Elementor raw-data defaults such as `isInner` for non-widget elements and omitted false `isLocked` values; malformed types are rejected rather than silently coerced. These bridge files are not promised as drop-in Template Library imports for live pages/posts; the smart create-new Template route deliberately adapts Page/Post document types before delegating to Elementor's local importer.
+The plugin currently accepts Elementor JSON structure version `0.4` and preserves the live document type. Current Elementor pages and posts therefore remain `wp-page` and `wp-post`, and their stable element IDs are kept for exact same-document synchronization. Before hashing or saving, the bridge normalizes Elementor raw-data defaults such as `isInner` for non-widget elements and omitted false `isLocked` values; malformed types are rejected rather than silently coerced. Page-style bridge files can also be imported from the Page/Post overviews, where the wrapper type is adapted to the actual destination document before save.
 
 It does not convert V3 to V4, V4 to V3, invent site IDs, or rewrite dynamic references.
 
@@ -137,9 +142,9 @@ The plugin does not use inbound webhooks. The target poll cadence is about one m
 
 == Security ==
 
-Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions, local exports, and smart imports additionally apply the relevant WordPress edit/create capability checks. Automatic apply revalidates the recorded administrator's bridge capability and `edit_post` permission for each target before activating that user's context for the background write.
+Only users with the custom `manage_elementor_json_bridge` capability can configure the bridge or trigger protected manual actions. Activation grants that capability to Administrators only. Manual document actions, local exports, and Page/Post imports additionally apply the relevant WordPress edit/create capability checks. Automatic apply revalidates the recorded administrator's bridge capability and `edit_post` permission for each target before activating that user's context for the background write.
 
-Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization. Smart-import uploads are not executed as files: the custom route accepts only one `.json` file, caps it at 5 MB, parses it as JSON and validates its Elementor structure before an action is available. ZIP is intentionally left to Elementor's native importer.
+Protected admin actions use authenticated WordPress REST requests with a REST nonce and server-side capability checks. Nonces are not treated as authorization. Page/Post import uploads are not executed as files: the custom route accepts only one `.json` file, caps it at 5 MB, parses it as JSON and validates its Elementor structure before an action is available. The destination is server-limited to `page` or `post`, and a checked replacement must still resolve to the same exact target during execution. ZIP is intentionally left to Elementor's native importer.
 
 GitHub credentials are encrypted with libsodium Secretbox where available or AES-256-GCM via OpenSSL as a fallback. Stored packages validate their algorithm-specific nonce/IV, authentication-tag, and ciphertext structure before decryption and fail closed on malformed input. If neither encryption primitive exists, GitHub credentials are not stored.
 
@@ -147,7 +152,7 @@ The plugin makes outbound requests only to fixed GitHub HTTPS endpoints. It does
 
 == External service ==
 
-Elementor JSON Bridge uses GitHub as an external storage and version-control service only after an administrator explicitly configures and connects it. Local page/post JSON downloads and smart local re-import do not require GitHub and do not modify GitHub synchronization state directly.
+Elementor JSON Bridge uses GitHub as an external storage and version-control service only after an administrator explicitly configures and connects it. Local page/post JSON downloads and local Page/Post import do not require GitHub and do not modify GitHub synchronization state directly.
 
 Data sent to GitHub can include the selected repository owner/name/branch, Elementor document JSON, document IDs in file paths, commit messages, and the GitHub authorization requests needed for Device Flow and repository access. Elementor JSON can contain website content and references to site-specific data, so use a private repository and review what you synchronize.
 
@@ -160,34 +165,34 @@ No Elementor JSON is sent to OpenAI by this plugin. ChatGPT or Codex access is a
 
 == Backups and rollback ==
 
-Before applying GitHub JSON, smart-replacing an imported JSON document, or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained. Before a snapshot is used, its JSON is hashed again and compared with the SHA-256 fingerprint stored when that snapshot was created; damaged or tampered snapshot content is rejected.
+Before applying GitHub JSON, replacing a detected Page/Post from local JSON, or manually restoring an older snapshot, the plugin stores a private local snapshot. The ten newest snapshots per Elementor document are retained. Before a snapshot is used, its JSON is hashed again and compared with the SHA-256 fingerprint stored when that snapshot was created; damaged or tampered snapshot content is rejected.
 
 GitHub commit history is useful version history but is not treated as the only backup.
 
 == Runtime verification ==
 
-The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.4.0 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3.
+The repository CI includes real WordPress + MySQL + Elementor runtime acceptance through `wp-env`, in addition to controlled regression tests. Version 0.4.1 is exercised against the minimum supported WordPress 6.8.3 / PHP 8.1 combination and the current WordPress / PHP 8.3 combination with Elementor 4.2.3.
 
-The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, graceful header/footer fallback without Elementor Pro, exact existing-Page recognition for smart import, rollback-snapshot creation before replacement, replacement readback, draft Page/Post creation, native Elementor Template creation, Product rejection and incompatible document-type rejection.
+The runtime probe verifies Elementor document save/readback, snapshot integrity rejection, a real `edit_post` denial path, page/post local export, product exclusion, graceful header/footer fallback without Elementor Pro, destination-scoped Page and Post recognition, fail-closed ambiguity, shared-lock rejection, stale analyzed-target rejection, rollback-snapshot creation before checked replacement, replacement readback, unchecked draft Page/Post creation, Product destination rejection and specialized non-Page template rejection.
 
-Controlled UI/security regressions additionally keep the capture-phase Elementor import interception, non-destructive default, explicit replacement confirmation, native-import fallback, JSON-only custom upload gate and bridge capability gate from silently regressing.
+Controlled UI/security regressions additionally verify that the bridge no longer intercepts Elementor's native Templates import trigger, replacement starts unchecked, the custom UI loads only on Pages/Posts, the analyzed target ID is rebound at execution, the JSON-only upload gate remains bounded, and sync/import share one document lock.
 
-This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final smart-import/export modal appearance, keyboard flow and screen-reader behavior still require a staging/browser check because public CI does not run an authenticated visual browser with Elementor Pro.
+This CI evidence validates those exact configurations. Actual Elementor Pro Theme Builder condition matching and the final Page/Post import/export modal appearance, keyboard flow and screen-reader behavior still require a staging/browser check because public CI does not run an authenticated visual browser with Elementor Pro.
 
 == Limitations ==
 
 Version 0.4.x remains intentionally conservative:
 
 * Automatic apply is optional and disabled by default.
-* Smart import accepts one JSON file; ZIP remains with Elementor's standard importer.
-* Smart replacement is deliberately conservative about target recognition and will not guess between ambiguous matches.
-* Page/Post creation and replacement are limited to Page-style Elementor document JSON. Site-part and other specialized document types require a compatible Elementor Template target or create-new Template flow.
-* Native global classes/variables are not claimed to be migrated cross-site by smart Page/Post replacement; use Elementor's standard import for cross-site migration when those definitions are needed.
+* Page/Post import accepts one JSON file; ZIP remains with Elementor's standard importer.
+* Replacement recognition is deliberately conservative and will not guess between ambiguous matches.
+* Page/Post creation and replacement are limited to Page-style Elementor document JSON. Specialized template types remain with Elementor's native Templates workflow.
+* Native global classes/variables are not claimed to be migrated cross-site by Page/Post import; use Elementor's standard import for cross-site/template migration when those definitions are needed.
 * Local header/footer export requires Elementor Pro Theme Builder and a matching site-part condition; the bundle is not a native single-template Elementor import format.
 * The plugin performs structural validation and exact post-save roundtrip verification, but it cannot prove every widget, add-on, dynamic tag, Theme Builder condition, form action, or site-specific dependency is valid.
 * WP-Cron is request-driven and the one-minute polling cadence is not a real-time guarantee.
 * Production use should be verified on staging first, especially for Elementor Pro, Theme Builder, Loops, Forms, WooCommerce, Dynamic Tags, Components and Atomic/V4 content.
-* The GitHub App must already exist and be installed on the selected repository for GitHub synchronization; local downloads and local smart import work independently.
+* The GitHub App must already exist and be installed on the selected repository for GitHub synchronization; local downloads and local Page/Post import work independently.
 * Single-repository mode is safe only when the repository is private; `site-sync` is the recommended data branch.
 
 == Uninstall ==
@@ -195,6 +200,15 @@ Version 0.4.x remains intentionally conservative:
 GitHub authentication is always deleted on uninstall. Settings and snapshots are retained by default so an accidental uninstall does not destroy recovery data. Enable Uninstall cleanup before uninstalling if you want all plugin-owned settings, snapshots, locks, and sync metadata removed.
 
 == Changelog ==
+
+= 0.4.1 =
+* Move the custom Elementor JSON import flow from Saved Templates to dedicated `Import Elementor template` buttons on the normal Pages and Posts overviews.
+* Stop intercepting Elementor's native Import Templates button; Elementor's own template and ZIP import behavior remains unchanged.
+* Replace the previous multi-action/manual-target UI with one detected-target checkbox: unchecked creates a new draft, checked replaces the detected same-type Elementor Page/Post.
+* Restrict recognition to the current destination type and fail closed on ambiguous or missing matches.
+* Revalidate the detected target ID immediately before replacement and share the existing sync document lock with local replacement to prevent concurrent writes.
+* Keep snapshot, Elementor save/readback and verified rollback protection for checked replacement.
+* Add runtime coverage for Page/Post destination isolation, ambiguity rejection, stale target rejection, shared-lock rejection and unchecked draft creation.
 
 = 0.4.0 =
 * Add a smart JSON re-import modal on Elementor's Saved Templates import action using WordPress React Components with the plugin's existing Material-inspired visual language.
@@ -258,4 +272,3 @@ GitHub authentication is always deleted on uninstall. Settings and snapshots are
 * Conflict detection with GitHub blob SHA and local SHA-256 fingerprints.
 * Local snapshots, structural validation, Elementor document save, readback verification, and rollback.
 * Safe automatic export and request-driven remote polling.
-* Explicit administrator approval for every remote apply.
