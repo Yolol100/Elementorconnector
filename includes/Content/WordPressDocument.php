@@ -10,10 +10,11 @@ use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 defined( 'ABSPATH' ) || exit;
 
 final class WordPressDocument {
-	public const FORMAT         = 'elementor-json-bridge/wordpress-content';
-	public const CREATE_FORMAT  = 'elementor-json-bridge/create-content';
-	public const VERSION        = 1;
-	private const MAX_BYTES     = 5_000_000;
+	public const FORMAT        = 'elementor-json-bridge/wordpress-content';
+	public const CREATE_FORMAT = 'elementor-json-bridge/create-content';
+	public const VERSION       = 1;
+
+	private const MAX_BYTES = 5_000_000;
 
 	private const BLOCKED_POST_TYPES = [
 		'attachment',
@@ -52,46 +53,30 @@ final class WordPressDocument {
 	) {}
 
 	public function post_types(): array {
-		$types = get_post_types( [ 'show_ui' => true ], 'objects' );
 		$allowed = [];
-
-		foreach ( $types as $name => $object ) {
+		foreach ( get_post_types( [ 'show_ui' => true ], 'objects' ) as $name => $object ) {
 			$name = (string) $name;
-			if ( in_array( $name, self::BLOCKED_POST_TYPES, true ) ) {
-				continue;
-			}
-			if ( ! is_object( $object ) || ! isset( $object->cap ) || empty( $object->cap->edit_posts ) ) {
+			if ( in_array( $name, self::BLOCKED_POST_TYPES, true ) || ! is_object( $object ) || ! isset( $object->cap ) || empty( $object->cap->edit_posts ) ) {
 				continue;
 			}
 			$allowed[] = $name;
 		}
-
 		sort( $allowed, SORT_STRING );
 		return $allowed;
 	}
 
 	public function supports( int $post_id ): bool {
 		$post = get_post( $post_id );
-		if ( ! $post instanceof \WP_Post ) {
-			return false;
-		}
-		if ( in_array( $post->post_type, self::BLOCKED_POST_TYPES, true ) ) {
-			return false;
-		}
-		if ( in_array( $post->post_status, [ 'auto-draft', 'trash' ], true ) ) {
-			return false;
-		}
-		return in_array( $post->post_type, $this->post_types(), true );
+		return $post instanceof \WP_Post
+			&& ! in_array( $post->post_type, self::BLOCKED_POST_TYPES, true )
+			&& ! in_array( $post->post_status, [ 'auto-draft', 'trash' ], true )
+			&& in_array( $post->post_type, $this->post_types(), true );
 	}
 
 	public function payload( int $post_id ): array {
-		if ( ! $this->supports( $post_id ) ) {
-			throw new RuntimeException( 'This WordPress content item is not managed by the bridge.' );
-		}
-
 		$post = get_post( $post_id );
-		if ( ! $post instanceof \WP_Post ) {
-			throw new RuntimeException( 'The WordPress content item does not exist.' );
+		if ( ! $post instanceof \WP_Post || ! $this->supports( $post_id ) ) {
+			throw new RuntimeException( 'This WordPress content item is not managed by the bridge.' );
 		}
 
 		$payload = [
@@ -122,10 +107,7 @@ final class WordPressDocument {
 		];
 
 		if ( $this->elementor->is_elementor_document( $post_id ) ) {
-			$payload['elementor'] = $this->elementor_validator->validate_array(
-				$this->elementor->payload( $post_id ),
-				$this->elementor->document_type( $post_id )
-			);
+			$payload['elementor']          = $this->elementor_validator->validate_array( $this->elementor->payload( $post_id ), $this->elementor->document_type( $post_id ) );
 			$payload['elementor']['title'] = (string) $post->post_title;
 		}
 
@@ -133,7 +115,7 @@ final class WordPressDocument {
 	}
 
 	public function decode( string $json, int $post_id ): array {
-		if ( strlen( $json ) > self::MAX_BYTES ) {
+		if ( self::MAX_BYTES < strlen( $json ) ) {
 			throw new RuntimeException( 'The WordPress content JSON is larger than 5 MB.' );
 		}
 		$data = json_decode( $json, true );
@@ -159,7 +141,7 @@ final class WordPressDocument {
 		if ( ! $target instanceof \WP_Post || ! $this->supports( $post_id ) ) {
 			throw new RuntimeException( 'The target WordPress content item is not managed by the bridge.' );
 		}
-		if ( $post_id !== (int) ( $payload['source']['id'] ?? 0 ) || $target->post_type !== (string) ( $payload['source']['post_type'] ?? '' ) ) {
+		if ( (int) ( $payload['source']['id'] ?? 0 ) !== $post_id || (string) ( $payload['source']['post_type'] ?? '' ) !== $target->post_type ) {
 			throw new RuntimeException( 'The GitHub file identity does not match the target WordPress item.' );
 		}
 
@@ -174,6 +156,7 @@ final class WordPressDocument {
 				throw new RuntimeException( 'The WordPress content JSON contains an invalid numeric post field.' );
 			}
 		}
+
 		$statuses = get_post_stati( [], 'names' );
 		if ( ! in_array( $post['status'], $statuses, true ) || in_array( $post['status'], [ 'auto-draft', 'trash' ], true ) ) {
 			throw new RuntimeException( 'The requested WordPress post status is not allowed.' );
@@ -181,11 +164,16 @@ final class WordPressDocument {
 		if ( ! in_array( $post['comment_status'], [ 'open', 'closed' ], true ) || ! in_array( $post['ping_status'], [ 'open', 'closed' ], true ) ) {
 			throw new RuntimeException( 'The requested comment or ping status is invalid.' );
 		}
-
-		if ( $post['parent'] > 0 ) {
+		if ( 0 < $post['parent'] ) {
 			$parent = get_post( $post['parent'] );
-			if ( ! $parent instanceof \WP_Post || $parent->post_type !== $target->post_type || $parent->ID === $target->ID ) {
+			if ( ! $parent instanceof \WP_Post || $target->post_type !== $parent->post_type || $target->ID === $parent->ID ) {
 				throw new RuntimeException( 'The requested parent is not valid for this WordPress content item.' );
+			}
+		}
+		if ( 0 < $post['featured_image'] ) {
+			$attachment = get_post( $post['featured_image'] );
+			if ( ! $attachment instanceof \WP_Post || 'attachment' !== $attachment->post_type ) {
+				throw new RuntimeException( 'The requested featured image does not exist.' );
 			}
 		}
 
@@ -204,18 +192,14 @@ final class WordPressDocument {
 			if ( ! is_array( $payload['elementor'] ) || ! $this->elementor->is_elementor_document( $post_id ) ) {
 				throw new RuntimeException( 'Elementor data can only be applied to an existing Elementor document.' );
 			}
-			$payload['elementor'] = $this->elementor_validator->validate_array(
-				$payload['elementor'],
-				$this->elementor->document_type( $post_id )
-			);
+			$payload['elementor']          = $this->elementor_validator->validate_array( $payload['elementor'], $this->elementor->document_type( $post_id ) );
 			$payload['elementor']['title'] = $post['title'];
 		}
 
 		$json = wp_json_encode( $payload );
-		if ( ! is_string( $json ) || strlen( $json ) > self::MAX_BYTES ) {
+		if ( ! is_string( $json ) || self::MAX_BYTES < strlen( $json ) ) {
 			throw new RuntimeException( 'The WordPress content JSON is larger than 5 MB.' );
 		}
-
 		return $payload;
 	}
 
@@ -230,24 +214,29 @@ final class WordPressDocument {
 			throw new RuntimeException( 'The WordPress content item no longer exists.' );
 		}
 		$post_type_object = get_post_type_object( $current->post_type );
-		if ( in_array( $payload['post']['status'], [ 'publish', 'future' ], true ) && ! current_user_can( $post_type_object?->cap->publish_posts ?? 'publish_posts' ) ) {
+		$publish_cap      = $post_type_object?->cap->publish_posts ?? 'publish_posts';
+		if ( in_array( $payload['post']['status'], [ 'publish', 'future' ], true ) && ! current_user_can( $publish_cap ) ) {
 			throw new RuntimeException( 'You are not allowed to publish this WordPress content item.' );
 		}
 
-		$post = $payload['post'];
-		$update = [
-			'ID'             => $post_id,
-			'post_title'     => $post['title'],
-			'post_name'      => $post['slug'],
-			'post_status'    => $post['status'],
-			'post_content'   => $post['content'],
-			'post_excerpt'   => $post['excerpt'],
-			'post_parent'    => $post['parent'],
-			'menu_order'     => $post['menu_order'],
-			'comment_status' => $post['comment_status'],
-			'ping_status'    => $post['ping_status'],
-		];
-		$result = wp_update_post( wp_slash( $update ), true );
+		$post   = $payload['post'];
+		$result = wp_update_post(
+			wp_slash(
+				[
+					'ID'             => $post_id,
+					'post_title'     => $post['title'],
+					'post_name'      => $post['slug'],
+					'post_status'    => $post['status'],
+					'post_content'   => $post['content'],
+					'post_excerpt'   => $post['excerpt'],
+					'post_parent'    => $post['parent'],
+					'menu_order'     => $post['menu_order'],
+					'comment_status' => $post['comment_status'],
+					'ping_status'    => $post['ping_status'],
+				]
+			),
+			true
+		);
 		if ( is_wp_error( $result ) ) {
 			throw new RuntimeException( 'WordPress rejected the content update.' );
 		}
@@ -257,12 +246,7 @@ final class WordPressDocument {
 		} else {
 			update_post_meta( $post_id, '_wp_page_template', $post['page_template'] );
 		}
-
-		if ( $post['featured_image'] > 0 ) {
-			$attachment = get_post( $post['featured_image'] );
-			if ( ! $attachment instanceof \WP_Post || 'attachment' !== $attachment->post_type ) {
-				throw new RuntimeException( 'The requested featured image does not exist.' );
-			}
+		if ( 0 < $post['featured_image'] ) {
 			set_post_thumbnail( $post_id, $post['featured_image'] );
 		} else {
 			delete_post_thumbnail( $post_id );
@@ -276,7 +260,6 @@ final class WordPressDocument {
 		if ( is_array( $payload['elementor'] ) ) {
 			$this->elementor->save_payload( $post_id, $payload['elementor'] );
 		}
-
 		clean_post_cache( $post_id );
 	}
 
@@ -284,15 +267,18 @@ final class WordPressDocument {
 		if ( self::CREATE_FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
 			throw new RuntimeException( 'The create-content request format is invalid.' );
 		}
+
 		$post_type = sanitize_key( (string) ( $request['post_type'] ?? '' ) );
-		if ( ! in_array( $post_type, $this->post_types(), true ) ) {
+		$object    = get_post_type_object( $post_type );
+		if ( ! in_array( $post_type, $this->post_types(), true ) || ! $object ) {
 			throw new RuntimeException( 'The requested WordPress post type is not managed by the bridge.' );
 		}
-		$object = get_post_type_object( $post_type );
-		if ( ! $object || ! current_user_can( $object->cap->edit_posts ) ) {
+		$create_cap = $object->cap->create_posts ?? $object->cap->edit_posts ?? 'edit_posts';
+		if ( ! current_user_can( $create_cap ) ) {
 			throw new RuntimeException( 'You are not allowed to create this WordPress content type.' );
 		}
-		$post = is_array( $request['post'] ?? null ) ? $request['post'] : [];
+
+		$post  = is_array( $request['post'] ?? null ) ? $request['post'] : [];
 		$title = isset( $post['title'] ) && is_string( $post['title'] ) ? $post['title'] : '';
 		if ( '' === trim( $title ) ) {
 			throw new RuntimeException( 'A new WordPress content item requires a title.' );
@@ -314,8 +300,8 @@ final class WordPressDocument {
 		if ( is_wp_error( $id ) ) {
 			throw new RuntimeException( 'WordPress could not create the requested draft.' );
 		}
-
 		$id = (int) $id;
+
 		try {
 			$payload = $this->payload( $id );
 			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $section ) {
@@ -333,7 +319,6 @@ final class WordPressDocument {
 			wp_delete_post( $id, true );
 			throw $throwable;
 		}
-
 		return $id;
 	}
 
@@ -351,7 +336,7 @@ final class WordPressDocument {
 			'path'      => $path,
 			'elementor' => $this->elementor->is_elementor_document( $post_id ),
 			'acf'       => function_exists( 'get_field_objects' ),
-			'yoast'     => class_exists( '\WPSEO_Meta' ),
+			'yoast'     => class_exists( '\\WPSEO_Meta' ),
 		];
 	}
 
@@ -374,19 +359,15 @@ final class WordPressDocument {
 	}
 
 	private function validate_taxonomies( array $taxonomies, string $post_type ): void {
-		$allowed = [];
-		foreach ( get_object_taxonomies( $post_type, 'objects' ) as $taxonomy => $object ) {
-			if ( is_object( $object ) && ! empty( $object->show_ui ) ) {
-				$allowed[] = (string) $taxonomy;
-			}
-		}
+		$objects = get_object_taxonomies( $post_type, 'objects' );
 		foreach ( $taxonomies as $taxonomy => $slugs ) {
-			if ( ! in_array( (string) $taxonomy, $allowed, true ) || ! is_array( $slugs ) || ! array_is_list( $slugs ) ) {
+			$object = $objects[ $taxonomy ] ?? null;
+			if ( ! is_object( $object ) || empty( $object->show_ui ) || ! is_array( $slugs ) || ! array_is_list( $slugs ) ) {
 				throw new RuntimeException( 'The WordPress content JSON contains an invalid taxonomy.' );
 			}
 			foreach ( $slugs as $slug ) {
-				if ( ! is_string( $slug ) || '' === $slug ) {
-					throw new RuntimeException( 'The WordPress content JSON contains an invalid taxonomy term.' );
+				if ( ! is_string( $slug ) || '' === $slug || ! get_term_by( 'slug', $slug, (string) $taxonomy ) instanceof \WP_Term ) {
+					throw new RuntimeException( 'A requested taxonomy term does not exist on this site.' );
 				}
 			}
 		}
@@ -401,14 +382,10 @@ final class WordPressDocument {
 			}
 			$ids = [];
 			foreach ( $slugs as $slug ) {
-				$term = get_term_by( 'slug', $slug, (string) $taxonomy );
-				if ( ! $term instanceof \WP_Term ) {
-					throw new RuntimeException( 'A requested taxonomy term does not exist on this site.' );
-				}
+				$term  = get_term_by( 'slug', $slug, (string) $taxonomy );
 				$ids[] = (int) $term->term_id;
 			}
-			$result = wp_set_object_terms( $post_id, $ids, (string) $taxonomy, false );
-			if ( is_wp_error( $result ) ) {
+			if ( is_wp_error( wp_set_object_terms( $post_id, $ids, (string) $taxonomy, false ) ) ) {
 				throw new RuntimeException( 'WordPress rejected a taxonomy update.' );
 			}
 		}
@@ -446,15 +423,12 @@ final class WordPressDocument {
 		}
 		$current = $this->acf( $post_id );
 		foreach ( $acf as $name => $field ) {
-			if ( ! isset( $current[ $name ] ) || ! is_array( $field ) ) {
+			$keys = is_array( $field ) ? array_keys( $field ) : [];
+			sort( $keys, SORT_STRING );
+			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys ) {
 				throw new RuntimeException( 'The ACF field set no longer matches this WordPress item.' );
 			}
-			$keys = array_keys( $field );
-			sort( $keys, SORT_STRING );
-			if ( [ 'key', 'type', 'value' ] !== $keys ) {
-				throw new RuntimeException( 'The ACF field payload is invalid.' );
-			}
-			if ( $current[ $name ]['key'] !== $field['key'] || $current[ $name ]['type'] !== $field['type'] ) {
+			if ( $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
 				throw new RuntimeException( 'An ACF field identity changed after export.' );
 			}
 		}
@@ -467,12 +441,12 @@ final class WordPressDocument {
 	}
 
 	private function yoast( int $post_id ): array {
-		if ( ! class_exists( '\WPSEO_Meta' ) ) {
+		if ( ! class_exists( '\\WPSEO_Meta' ) ) {
 			return [];
 		}
 		$result = [];
 		foreach ( self::YOAST_FIELDS as $field ) {
-			$key = '_yoast_wpseo_' . $field;
+			$key              = '_yoast_wpseo_' . $field;
 			$result[ $field ] = metadata_exists( 'post', $post_id, $key ) ? get_post_meta( $post_id, $key, true ) : null;
 		}
 		return $result;
@@ -482,7 +456,7 @@ final class WordPressDocument {
 		if ( [] === $yoast ) {
 			return;
 		}
-		if ( ! class_exists( '\WPSEO_Meta' ) ) {
+		if ( ! class_exists( '\\WPSEO_Meta' ) ) {
 			throw new RuntimeException( 'Yoast SEO content is present but Yoast SEO is not active.' );
 		}
 		if ( array_diff( array_keys( $yoast ), self::YOAST_FIELDS ) ) {
