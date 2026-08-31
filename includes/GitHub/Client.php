@@ -78,6 +78,28 @@ final class Client {
 		];
 	}
 
+	public function list_directory( string $path ): array {
+		[ $owner, $repo ] = $this->repository_parts();
+		$branch = (string) Settings::get( 'repo_branch', 'main' );
+		$route  = '/repos/' . rawurlencode( $owner ) . '/' . rawurlencode( $repo ) . '/contents/' . $this->encode_path( $path );
+		$response = $this->request(
+			'GET',
+			$route,
+			null,
+			[ 'ref' => $branch ],
+			[ 404 ],
+			'application/vnd.github.object+json'
+		);
+		if ( 404 === (int) ( $response['_status'] ?? 200 ) ) {
+			return [];
+		}
+		$entries = $response['entries'] ?? ( array_is_list( $response ) ? $response : null );
+		if ( ! is_array( $entries ) ) {
+			throw new RuntimeException( 'GitHub returned an unexpected directory response.' );
+		}
+		return array_values( array_filter( $entries, 'is_array' ) );
+	}
+
 	public function put_file( string $path, string $content, ?string $sha, string $message ): array {
 		[ $owner, $repo ] = $this->repository_parts();
 		$route = '/repos/' . rawurlencode( $owner ) . '/' . rawurlencode( $repo ) . '/contents/' . $this->encode_path( $path );
@@ -122,10 +144,10 @@ final class Client {
 			'redirection'         => 0,
 			'limit_response_size' => 8_000_000,
 			'headers'             => [
-				'Accept'                 => $accept,
-				'Authorization'          => 'Bearer ' . $this->auth->access_token(),
-				'X-GitHub-Api-Version'   => self::API_VERSION,
-				'User-Agent'             => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
+				'Accept'               => $accept,
+				'Authorization'        => 'Bearer ' . $this->auth->access_token(),
+				'X-GitHub-Api-Version' => self::API_VERSION,
+				'User-Agent'           => 'Elementor-JSON-Bridge/' . ( defined( 'EJB_VERSION' ) ? EJB_VERSION : 'unknown' ),
 			],
 		];
 		if ( null !== $json ) {
@@ -173,7 +195,7 @@ final class Client {
 	private function capture_rate_limit( array $response, int $status ): void {
 		$retry_after = (int) wp_remote_retrieve_header( $response, 'retry-after' );
 		$remaining   = (string) wp_remote_retrieve_header( $response, 'x-ratelimit-remaining' );
-		$reset_at   = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
+		$reset_at    = (int) wp_remote_retrieve_header( $response, 'x-ratelimit-reset' );
 
 		if ( 429 !== $status && $retry_after < 1 && ! ( 403 === $status && '0' === $remaining ) ) {
 			return;

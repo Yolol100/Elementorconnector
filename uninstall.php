@@ -10,6 +10,7 @@ wp_unschedule_hook( 'ejb_export_document' );
 delete_option( 'ejb_github_auth' );
 delete_option( 'ejb_poll_page' );
 delete_option( 'ejb_github_rate_limit_until' );
+delete_option( 'ejb_processed_content_requests' );
 delete_metadata( 'user', 0, '_ejb_device_flow', '', true );
 
 $ejb_role = get_role( 'administrator' );
@@ -33,6 +34,7 @@ foreach ( $ejb_snapshots as $ejb_snapshot_id ) {
 foreach (
 	[
 		'_ejb_enabled',
+		'_ejb_excluded',
 		'_ejb_status',
 		'_ejb_base_hash',
 		'_ejb_remote_sha',

@@ -65,6 +65,9 @@ final class Documents {
 	}
 
 	public function is_elementor_document( int $post_id ): bool {
+		if ( 'builder' !== (string) get_post_meta( $post_id, '_elementor_edit_mode', true ) ) {
+			return false;
+		}
 		try {
 			$this->document( $post_id );
 			return true;

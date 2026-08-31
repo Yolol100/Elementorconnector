@@ -4,6 +4,8 @@
   "phpVersion": "8.3",
   "plugins": [
     "https://downloads.wordpress.org/plugin/elementor.4.2.3.zip",
+    "https://downloads.wordpress.org/plugin/advanced-custom-fields.6.8.9.zip",
+    "https://downloads.wordpress.org/plugin/wordpress-seo.28.3.zip",
     "."
   ],
   "mappings": {

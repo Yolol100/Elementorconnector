@@ -4,7 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Admin;
 
 use RuntimeException;
 use Throwable;
-use Webactueel\ElementorJsonBridge\Elementor\Documents;
+use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Lifecycle\Hooks;
@@ -19,7 +19,7 @@ final class RestController {
 	public function __construct(
 		private readonly DeviceAuth $auth,
 		private readonly Client $github,
-		private readonly Documents $documents,
+		private readonly WordPressDocument $content,
 		private readonly Manager $sync
 	) {}
 
@@ -60,7 +60,15 @@ final class RestController {
 	}
 
 	public function device_poll(): \WP_REST_Response|\WP_Error {
-		return $this->respond( fn (): array => $this->auth->poll( get_current_user_id() ) );
+		return $this->respond(
+			function (): array {
+				$result = $this->auth->poll( get_current_user_id() );
+				if ( 'connected' === ( $result['status'] ?? '' ) ) {
+					Settings::mark_connected_actor( get_current_user_id() );
+				}
+				return $result;
+			}
+		);
 	}
 
 	public function disconnect(): \WP_REST_Response {
@@ -115,11 +123,8 @@ final class RestController {
 		$id = absint( $request['id'] );
 		return $this->respond(
 			function () use ( $id, $action ): array {
-				if ( $id < 1 || ! get_post( $id ) || ! current_user_can( 'edit_post', $id ) ) {
-					throw new RuntimeException( 'You are not allowed to edit this document.' );
-				}
-				if ( ! $this->documents->is_elementor_document( $id ) ) {
-					throw new RuntimeException( 'This is not an editable Elementor document.' );
+				if ( $id < 1 || ! $this->content->supports( $id ) || ! current_user_can( 'edit_post', $id ) ) {
+					throw new RuntimeException( 'You are not allowed to edit this managed WordPress content item.' );
 				}
 				$result = $action( $id );
 				return [ 'ok' => true ] + $result;
