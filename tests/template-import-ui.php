@@ -48,7 +48,7 @@ $assert(str_contains($controller, "current_user_can( Hooks::CAPABILITY )"), 'Pag
 $assert(str_contains($controller, 'PayloadValidator::MAX_BYTES'), 'Page/Post import upload size is no longer bounded by the JSON validator limit.');
 
 $assert(str_contains($plugin, '$lock              = new Lock();'), 'Plugin bootstrap no longer creates one shared document lock.');
-$assert(str_contains($plugin, 'new Manager( $documents, $validator, $github, $snapshots, $lock )'), 'GitHub sync does not use the shared document lock.');
+$assert(str_contains($plugin, 'new Manager( $content, $github, $snapshots, $lock )'), 'GitHub sync does not use the shared document lock.');
 $assert(str_contains($plugin, 'new TemplateImporter( $documents, $validator, $snapshots, $lock )'), 'Page/Post import does not use the shared document lock.');
 
 fwrite(STDOUT, "PASS template-import-ui\n");
