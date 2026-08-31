@@ -10,10 +10,10 @@ use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 defined( 'ABSPATH' ) || exit;
 
 final class WordPressDocument {
-	public const FORMAT  = 'elementor-json-bridge/wordpress-content';
-	public const VERSION = 1;
-
-	private const MAX_BYTES = 5_000_000;
+	public const FORMAT         = 'elementor-json-bridge/wordpress-content';
+	public const CREATE_FORMAT  = 'elementor-json-bridge/create-content';
+	public const VERSION        = 1;
+	private const MAX_BYTES     = 5_000_000;
 
 	private const BLOCKED_POST_TYPES = [
 		'attachment',
@@ -60,7 +60,7 @@ final class WordPressDocument {
 			if ( in_array( $name, self::BLOCKED_POST_TYPES, true ) ) {
 				continue;
 			}
-			if ( ! is_object( $object ) || empty( $object->cap->edit_posts ) ) {
+			if ( ! is_object( $object ) || ! isset( $object->cap ) || empty( $object->cap->edit_posts ) ) {
 				continue;
 			}
 			$allowed[] = $name;
@@ -126,6 +126,7 @@ final class WordPressDocument {
 				$this->elementor->payload( $post_id ),
 				$this->elementor->document_type( $post_id )
 			);
+			$payload['elementor']['title'] = (string) $post->post_title;
 		}
 
 		return $this->validate_array( $payload, $post_id );
@@ -181,6 +182,13 @@ final class WordPressDocument {
 			throw new RuntimeException( 'The requested comment or ping status is invalid.' );
 		}
 
+		if ( $post['parent'] > 0 ) {
+			$parent = get_post( $post['parent'] );
+			if ( ! $parent instanceof \WP_Post || $parent->post_type !== $target->post_type || $parent->ID === $target->ID ) {
+				throw new RuntimeException( 'The requested parent is not valid for this WordPress content item.' );
+			}
+		}
+
 		foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $section ) {
 			if ( ! isset( $payload[ $section ] ) || ! is_array( $payload[ $section ] ) || array_is_list( $payload[ $section ] ) ) {
 				throw new RuntimeException( 'The WordPress content JSON contains an invalid metadata section.' );
@@ -200,6 +208,7 @@ final class WordPressDocument {
 				$payload['elementor'],
 				$this->elementor->document_type( $post_id )
 			);
+			$payload['elementor']['title'] = $post['title'];
 		}
 
 		$json = wp_json_encode( $payload );
@@ -214,6 +223,15 @@ final class WordPressDocument {
 		$payload = $this->validate_array( $payload, $post_id );
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WordPress content item.' );
+		}
+
+		$current = get_post( $post_id );
+		if ( ! $current instanceof \WP_Post ) {
+			throw new RuntimeException( 'The WordPress content item no longer exists.' );
+		}
+		$post_type_object = get_post_type_object( $current->post_type );
+		if ( in_array( $payload['post']['status'], [ 'publish', 'future' ], true ) && ! current_user_can( $post_type_object?->cap->publish_posts ?? 'publish_posts' ) ) {
+			throw new RuntimeException( 'You are not allowed to publish this WordPress content item.' );
 		}
 
 		$post = $payload['post'];
@@ -250,8 +268,8 @@ final class WordPressDocument {
 			delete_post_thumbnail( $post_id );
 		}
 
-		$this->apply_taxonomies( $post_id, $payload['taxonomies'] );
-		$this->apply_registered_meta( $post_id, $payload['registered_meta'], get_post_type( $post_id ) ?: '' );
+		$this->apply_taxonomies( $post_id, $payload['taxonomies'], $current->post_type );
+		$this->apply_registered_meta( $post_id, $payload['registered_meta'], $current->post_type );
 		$this->apply_acf( $post_id, $payload['acf'] );
 		$this->apply_yoast( $post_id, $payload['yoast'] );
 
@@ -260,6 +278,63 @@ final class WordPressDocument {
 		}
 
 		clean_post_cache( $post_id );
+	}
+
+	public function create_draft( array $request ): int {
+		if ( self::CREATE_FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
+			throw new RuntimeException( 'The create-content request format is invalid.' );
+		}
+		$post_type = sanitize_key( (string) ( $request['post_type'] ?? '' ) );
+		if ( ! in_array( $post_type, $this->post_types(), true ) ) {
+			throw new RuntimeException( 'The requested WordPress post type is not managed by the bridge.' );
+		}
+		$object = get_post_type_object( $post_type );
+		if ( ! $object || ! current_user_can( $object->cap->edit_posts ) ) {
+			throw new RuntimeException( 'You are not allowed to create this WordPress content type.' );
+		}
+		$post = is_array( $request['post'] ?? null ) ? $request['post'] : [];
+		$title = isset( $post['title'] ) && is_string( $post['title'] ) ? $post['title'] : '';
+		if ( '' === trim( $title ) ) {
+			throw new RuntimeException( 'A new WordPress content item requires a title.' );
+		}
+
+		$id = wp_insert_post(
+			wp_slash(
+				[
+					'post_type'    => $post_type,
+					'post_status'  => 'draft',
+					'post_title'   => $title,
+					'post_name'    => isset( $post['slug'] ) && is_string( $post['slug'] ) ? $post['slug'] : '',
+					'post_content' => isset( $post['content'] ) && is_string( $post['content'] ) ? $post['content'] : '',
+					'post_excerpt' => isset( $post['excerpt'] ) && is_string( $post['excerpt'] ) ? $post['excerpt'] : '',
+				]
+			),
+			true
+		);
+		if ( is_wp_error( $id ) ) {
+			throw new RuntimeException( 'WordPress could not create the requested draft.' );
+		}
+
+		$id = (int) $id;
+		try {
+			$payload = $this->payload( $id );
+			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $section ) {
+				if ( isset( $request[ $section ] ) && is_array( $request[ $section ] ) ) {
+					$payload[ $section ] = $request[ $section ];
+				}
+			}
+			$payload['post']['title']   = $title;
+			$payload['post']['slug']    = isset( $post['slug'] ) && is_string( $post['slug'] ) ? $post['slug'] : $payload['post']['slug'];
+			$payload['post']['content'] = isset( $post['content'] ) && is_string( $post['content'] ) ? $post['content'] : '';
+			$payload['post']['excerpt'] = isset( $post['excerpt'] ) && is_string( $post['excerpt'] ) ? $post['excerpt'] : '';
+			$payload['post']['status']  = 'draft';
+			$this->apply( $id, $payload );
+		} catch ( \Throwable $throwable ) {
+			wp_delete_post( $id, true );
+			throw $throwable;
+		}
+
+		return $id;
 	}
 
 	public function index_descriptor( int $post_id, string $path ): array {
@@ -299,10 +374,8 @@ final class WordPressDocument {
 	}
 
 	private function validate_taxonomies( array $taxonomies, string $post_type ): void {
-		$allowed = array_keys( $this->taxonomies( 0, $post_type ) );
-		$objects = get_object_taxonomies( $post_type, 'objects' );
 		$allowed = [];
-		foreach ( $objects as $taxonomy => $object ) {
+		foreach ( get_object_taxonomies( $post_type, 'objects' ) as $taxonomy => $object ) {
 			if ( is_object( $object ) && ! empty( $object->show_ui ) ) {
 				$allowed[] = (string) $taxonomy;
 			}
@@ -319,8 +392,13 @@ final class WordPressDocument {
 		}
 	}
 
-	private function apply_taxonomies( int $post_id, array $taxonomies ): void {
+	private function apply_taxonomies( int $post_id, array $taxonomies, string $post_type ): void {
+		$objects = get_object_taxonomies( $post_type, 'objects' );
 		foreach ( $taxonomies as $taxonomy => $slugs ) {
+			$object = $objects[ $taxonomy ] ?? null;
+			if ( ! is_object( $object ) || ! current_user_can( $object->cap->assign_terms ) ) {
+				throw new RuntimeException( 'You are not allowed to assign one of the requested taxonomies.' );
+			}
 			$ids = [];
 			foreach ( $slugs as $slug ) {
 				$term = get_term_by( 'slug', $slug, (string) $taxonomy );
@@ -368,8 +446,13 @@ final class WordPressDocument {
 		}
 		$current = $this->acf( $post_id );
 		foreach ( $acf as $name => $field ) {
-			if ( ! isset( $current[ $name ] ) || ! is_array( $field ) || array_keys( $field ) !== [ 'key', 'type', 'value' ] ) {
+			if ( ! isset( $current[ $name ] ) || ! is_array( $field ) ) {
 				throw new RuntimeException( 'The ACF field set no longer matches this WordPress item.' );
+			}
+			$keys = array_keys( $field );
+			sort( $keys, SORT_STRING );
+			if ( [ 'key', 'type', 'value' ] !== $keys ) {
+				throw new RuntimeException( 'The ACF field payload is invalid.' );
 			}
 			if ( $current[ $name ]['key'] !== $field['key'] || $current[ $name ]['type'] !== $field['type'] ) {
 				throw new RuntimeException( 'An ACF field identity changed after export.' );
@@ -434,9 +517,10 @@ final class WordPressDocument {
 	}
 
 	private function validate_registered_meta( array $meta, string $post_type ): void {
-		$allowed = array_keys( $this->registered_meta( 0, $post_type ) );
+		$definitions = function_exists( 'get_registered_meta_keys' ) ? get_registered_meta_keys( 'post', $post_type ) : [];
 		foreach ( array_keys( $meta ) as $key ) {
-			if ( ! in_array( (string) $key, $allowed, true ) ) {
+			$args = $definitions[ $key ] ?? null;
+			if ( ! is_array( $args ) || str_starts_with( (string) $key, '_' ) || empty( $args['show_in_rest'] ) ) {
 				throw new RuntimeException( 'The WordPress content JSON contains unsupported registered metadata.' );
 			}
 		}
@@ -445,6 +529,9 @@ final class WordPressDocument {
 	private function apply_registered_meta( int $post_id, array $meta, string $post_type ): void {
 		$definitions = function_exists( 'get_registered_meta_keys' ) ? get_registered_meta_keys( 'post', $post_type ) : [];
 		foreach ( $meta as $key => $value ) {
+			if ( ! current_user_can( 'edit_post_meta', $post_id, (string) $key ) ) {
+				throw new RuntimeException( 'You are not allowed to edit one of the requested registered metadata fields.' );
+			}
 			$args = $definitions[ $key ] ?? [];
 			if ( ! empty( $args['single'] ) ) {
 				update_post_meta( $post_id, (string) $key, $value );
