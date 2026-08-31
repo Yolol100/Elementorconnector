@@ -15,17 +15,14 @@ final class Settings {
 		'repo_branch'              => 'main',
 		'repo_root'                => 'site-data',
 		'auto_export'              => 1,
-		'auto_apply'               => 1,
+		'auto_apply'               => 0,
 		'auto_apply_actor'         => 0,
 		'delete_data_on_uninstall' => 0,
 	];
 
 	public static function all(): array {
 		$stored = get_option( self::OPTION, [] );
-		$settings = wp_parse_args( is_array( $stored ) ? $stored : [], self::DEFAULTS );
-		$settings['auto_export'] = 1;
-		$settings['auto_apply']  = 1;
-		return $settings;
+		return wp_parse_args( is_array( $stored ) ? $stored : [], self::DEFAULTS );
 	}
 
 	public static function get( string $key, mixed $fallback = null ): mixed {
@@ -60,10 +57,7 @@ final class Settings {
 		}
 
 		$previous_actor = is_array( $previous ) ? (int) ( $previous['auto_apply_actor'] ?? 0 ) : 0;
-		$actor = get_current_user_id();
-		if ( $actor < 1 ) {
-			$actor = $previous_actor;
-		}
+		$previous_apply = is_array( $previous ) ? (int) ( $previous['auto_apply'] ?? 0 ) : 0;
 
 		return [
 			'github_client_id'         => $client_id,
@@ -72,8 +66,8 @@ final class Settings {
 			'repo_branch'              => $branch,
 			'repo_root'                => '' !== $root ? $root : 'site-data',
 			'auto_export'              => 1,
-			'auto_apply'               => 1,
-			'auto_apply_actor'         => $actor,
+			'auto_apply'               => $previous_apply,
+			'auto_apply_actor'         => $previous_actor,
 			'delete_data_on_uninstall' => empty( $input['delete_data_on_uninstall'] ) ? 0 : 1,
 		];
 	}
@@ -109,7 +103,7 @@ final class Settings {
 		foreach ( $segments as $segment ) {
 			if ( '.' === $segment || '..' === $segment ) {
 				continue;
-		}
+			}
 
 			$segment = preg_replace( '/[^A-Za-z0-9._-]/', '-', $segment ) ?? '';
 			$segment = trim( $segment, '.-' );
