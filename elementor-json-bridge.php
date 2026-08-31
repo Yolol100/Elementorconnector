@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Elementor JSON Bridge
  * Description: Safely synchronizes, exports, and re-imports Elementor document JSON with conflict detection, snapshots, validation, and rollback.
- * Version: 0.4.0
+ * Version: 0.4.1
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * Update URI: false
@@ -17,7 +17,7 @@ namespace Webactueel\ElementorJsonBridge;
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'EJB_VERSION', '0.4.0' );
+define( 'EJB_VERSION', '0.4.1' );
 define( 'EJB_FILE', __FILE__ );
 define( 'EJB_DIR', __DIR__ );
 
