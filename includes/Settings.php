@@ -13,16 +13,19 @@ final class Settings {
 		'repo_owner'               => '',
 		'repo_name'                => '',
 		'repo_branch'              => 'main',
-		'repo_root'                => 'elementor',
+		'repo_root'                => 'site-data',
 		'auto_export'              => 1,
-		'auto_apply'               => 0,
+		'auto_apply'               => 1,
 		'auto_apply_actor'         => 0,
 		'delete_data_on_uninstall' => 0,
 	];
 
 	public static function all(): array {
 		$stored = get_option( self::OPTION, [] );
-		return wp_parse_args( is_array( $stored ) ? $stored : [], self::DEFAULTS );
+		$settings = wp_parse_args( is_array( $stored ) ? $stored : [], self::DEFAULTS );
+		$settings['auto_export'] = 1;
+		$settings['auto_apply']  = 1;
+		return $settings;
 	}
 
 	public static function get( string $key, mixed $fallback = null ): mixed {
@@ -37,7 +40,7 @@ final class Settings {
 		$owner     = isset( $input['repo_owner'] ) ? sanitize_text_field( wp_unslash( $input['repo_owner'] ) ) : '';
 		$repo      = isset( $input['repo_name'] ) ? sanitize_text_field( wp_unslash( $input['repo_name'] ) ) : '';
 		$branch    = isset( $input['repo_branch'] ) ? sanitize_text_field( wp_unslash( $input['repo_branch'] ) ) : 'main';
-		$root      = isset( $input['repo_root'] ) ? sanitize_text_field( wp_unslash( $input['repo_root'] ) ) : 'elementor';
+		$root      = isset( $input['repo_root'] ) ? sanitize_text_field( wp_unslash( $input['repo_root'] ) ) : 'site-data';
 
 		$client_id = preg_replace( '/[^A-Za-z0-9._-]/', '', $client_id ) ?? '';
 		$owner     = preg_replace( '/[^A-Za-z0-9_.-]/', '', $owner ) ?? '';
@@ -56,11 +59,10 @@ final class Settings {
 			delete_option( self::AUTH_OPTION );
 		}
 
-		$auto_apply       = empty( $input['auto_apply'] ) ? 0 : 1;
-		$previous_actor   = is_array( $previous ) ? (int) ( $previous['auto_apply_actor'] ?? 0 ) : 0;
-		$auto_apply_actor = $auto_apply ? get_current_user_id() : 0;
-		if ( $auto_apply && $auto_apply_actor < 1 ) {
-			$auto_apply_actor = $previous_actor;
+		$previous_actor = is_array( $previous ) ? (int) ( $previous['auto_apply_actor'] ?? 0 ) : 0;
+		$actor = get_current_user_id();
+		if ( $actor < 1 ) {
+			$actor = $previous_actor;
 		}
 
 		return [
@@ -68,12 +70,23 @@ final class Settings {
 			'repo_owner'               => $owner,
 			'repo_name'                => $repo,
 			'repo_branch'              => $branch,
-			'repo_root'                => '' !== $root ? $root : 'elementor',
-			'auto_export'              => empty( $input['auto_export'] ) ? 0 : 1,
-			'auto_apply'               => $auto_apply,
-			'auto_apply_actor'         => $auto_apply_actor,
+			'repo_root'                => '' !== $root ? $root : 'site-data',
+			'auto_export'              => 1,
+			'auto_apply'               => 1,
+			'auto_apply_actor'         => $actor,
 			'delete_data_on_uninstall' => empty( $input['delete_data_on_uninstall'] ) ? 0 : 1,
 		];
+	}
+
+	public static function mark_connected_actor( int $user_id ): void {
+		if ( $user_id < 1 ) {
+			return;
+		}
+		$settings = self::all();
+		$settings['auto_export']      = 1;
+		$settings['auto_apply']       = 1;
+		$settings['auto_apply_actor'] = $user_id;
+		update_option( self::OPTION, $settings, false );
 	}
 
 	public static function repo_is_configured(): bool {
@@ -96,7 +109,7 @@ final class Settings {
 		foreach ( $segments as $segment ) {
 			if ( '.' === $segment || '..' === $segment ) {
 				continue;
-			}
+		}
 
 			$segment = preg_replace( '/[^A-Za-z0-9._-]/', '-', $segment ) ?? '';
 			$segment = trim( $segment, '.-' );
