@@ -20,6 +20,7 @@ use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
 use Webactueel\ElementorJsonBridge\Sync\AutoApply;
+use Webactueel\ElementorJsonBridge\Sync\ContentRequests;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 
@@ -53,6 +54,7 @@ final class Plugin {
 		( new TemplateImportUi() )->register();
 		( new TemplateImportController( $template_importer ) )->register();
 		( new Scheduler( $sync ) )->register();
+		( new ContentRequests( $content, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 100, 3 );
 
