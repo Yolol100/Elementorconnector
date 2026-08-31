@@ -35,10 +35,11 @@ final class ContentRequests {
 			return;
 		}
 
-		$root = (string) Settings::get( 'repo_root', 'site-data' );
+		$root      = (string) Settings::get( 'repo_root', 'site-data' );
 		$directory = trim( $root . '/requests', '/' );
 		try {
 			$this->github->assert_private_repository();
+			$this->ensure_manifest( $root );
 			$entries = $this->github->list_directory( $directory );
 		} catch ( Throwable ) {
 			return;
@@ -60,6 +61,33 @@ final class ContentRequests {
 			$this->process_file( $path, $actor_id );
 			++$processed_count;
 		}
+	}
+
+	private function ensure_manifest( string $root ): void {
+		$path = trim( $root . '/bridge.json', '/' );
+		$manifest = [
+			'format'                      => 'elementor-json-bridge/repository-manifest',
+			'version'                     => 1,
+			'site_index'                  => trim( $root . '/site-index.json', '/' ),
+			'content_path_pattern'        => trim( $root . '/content/{kind}/{id}.json', '/' ),
+			'create_request_path_pattern' => trim( $root . '/requests/{request-id}.json', '/' ),
+			'create_request_format'       => WordPressDocument::CREATE_FORMAT,
+			'create_request_version'      => WordPressDocument::VERSION,
+			'new_content_status'          => 'draft',
+			'editable_sections'           => [ 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ],
+			'rules'                       => [
+				'Edit existing items only through the path listed in site-index.json.',
+				'Do not change source.id or source.post_type in an existing content file.',
+				'Use a unique request_id to create new content. The site writes the result back into the request file.',
+				'New content is always created as a draft.',
+			],
+		];
+		$encoded = CanonicalJson::encode( $manifest, true );
+		$remote  = $this->github->get_file( $path );
+		if ( $remote && hash_equals( hash( 'sha256', $encoded ), hash( 'sha256', (string) $remote['content'] ) ) ) {
+			return;
+		}
+		$this->github->put_file( $path, $encoded, $remote ? (string) $remote['sha'] : null, 'Refresh WordPress bridge manifest' );
 	}
 
 	private function process_file( string $path, int $actor_id ): void {
@@ -124,7 +152,7 @@ final class ContentRequests {
 			);
 		} catch ( Throwable $throwable ) {
 			try {
-				$file = isset( $file ) && is_array( $file ) ? $file : $this->github->get_file( $path );
+				$file    = isset( $file ) && is_array( $file ) ? $file : $this->github->get_file( $path );
 				$request = isset( $request ) && is_array( $request ) ? $request : [];
 				if ( $file && $request ) {
 					$this->write_result(
