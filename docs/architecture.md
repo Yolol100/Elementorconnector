@@ -2,13 +2,14 @@
 
 ## Purpose
 
-Elementor JSON Bridge is a narrow synchronization and export boundary around WordPress/Elementor. It deliberately does not contain an AI client. ChatGPT/Codex can work on synchronized JSON through GitHub while WordPress retains final validation/write authority. Administrators can also download selected Elementor Pages and Posts locally without changing GitHub sync state.
+Elementor JSON Bridge is a narrow synchronization, export and re-import boundary around WordPress/Elementor. It deliberately does not contain an AI client. ChatGPT/Codex can work on synchronized JSON through GitHub while WordPress retains final validation/write authority. Administrators can also download selected Elementor Pages and Posts locally and re-import controlled Elementor JSON without changing GitHub sync state directly.
 
 ## Canonical responsibilities
 
 - **WordPress/Elementor**: live document state and final save authority.
 - **Plugin sync layer**: GitHub transport, auth, validation, canonicalization, conflict detection, snapshots, rollback and verification.
 - **Plugin local export layer**: read-only page/post download, product exclusion and optional Theme Builder site-part resolution.
+- **Plugin smart import layer**: JSON upload validation, conservative target recognition, explicit replace/create intent, Page/Post draft creation, native Template creation, replacement snapshots, readback and rollback verification.
 - **Private GitHub content repo or private site-data branch**: reviewable/versioned JSON transport and history.
 - **ChatGPT/Codex**: optional reviewed editor of repository JSON; never trusted as runtime proof.
 
@@ -24,7 +25,7 @@ verified
 error
 ```
 
-`attempted`, `applied` and `verified` are not interchangeable. A write reaches `verified` only after Elementor readback matches the expected canonical fingerprint. Local browser downloads do not enter or mutate this state model.
+`attempted`, `applied` and `verified` are not interchangeable. A write reaches `verified` only after Elementor readback matches the expected canonical fingerprint. Local browser downloads do not enter or mutate this state model. Smart local import is a WordPress-side content action; any normal sync hooks that observe the resulting local save continue to own subsequent sync-state changes.
 
 ## Local page/post export
 
@@ -41,6 +42,52 @@ error
 11. No local-export operation reads GitHub credentials, changes sync metadata, writes Elementor content or creates rollback snapshots.
 
 The site-parts bundle is a bridge transport artifact, not a claim of native single-template Elementor Library compatibility.
+
+## Smart template JSON re-import
+
+The smart-import surface is layered on Elementor's existing Saved Templates import trigger. The plugin intercepts the native click in capture phase and opens its own WordPress Components modal. A one-shot bypass lets the user return to Elementor's original importer, so native ZIP behavior is not replaced.
+
+### Input boundary
+
+1. The custom REST path accepts exactly one uploaded `.json` file and caps it at the same 5 MB limit as the document validator.
+2. Uploaded bytes are read only as data; the file is never executed.
+3. The root must be an object. Standard document JSON may contain the five bridge/Elementor core fields plus Elementor's current `global_classes` and `global_variables` snapshots. Bridge site-parts bundles may provide their main `document` wrapper.
+4. The core wrapper is validated and canonicalized through `PayloadValidator` before any action is offered.
+5. ZIP remains on Elementor's standard importer.
+
+### Recognition boundary
+
+Recognition is a suggestion, never authorization and never an automatic destructive write. Create-new Template remains the default action.
+
+A proposed target is returned only when one of these deterministic signals agrees with the JSON title/type and produces a compatible editable Elementor document:
+
+1. bridge bundle `source.post_id` + `post_type` + exact title;
+2. native `elementor-{id}-YYYY-MM-DD.json` filename + existing Template ID + exact title;
+3. bridge `{post-slug}-elementor.json` filename + exact Page/Post slug + exact title;
+4. one and only one compatible exact-title match.
+
+No fuzzy title matching, nearest-neighbor guessing, product matching or silent ambiguity resolution is allowed. Manual target search is still server-filtered to editable `page`, `post` and `elementor_library` documents.
+
+### Replacement path
+
+1. User selects **Replace existing item** and a target, then separately confirms the destructive action.
+2. Server rechecks bridge capability, target type, `edit_post`, Elementor editability and source/target type compatibility.
+3. Existing WordPress title and live target document type are retained. Imported Elementor `content` and `page_settings` are adapted to that target type.
+4. Current payload is validated and fingerprinted.
+5. A private snapshot is created with reason `before_json_import`.
+6. Imported payload is saved through `Documents::save_payload()` / Elementor's document API.
+7. Readback is validated and must match the expected canonical SHA-256 fingerprint.
+8. On any apply/readback failure, the integrity-checked snapshot is restored and the restored fingerprint must match the original current fingerprint.
+9. If rollback cannot itself be verified, the operation returns a distinct rollback-failure error and never claims success.
+
+Products are excluded before the document adapter is reached.
+
+### Create-new paths
+
+- **New Page** and **New Post** accept only Page-style source types (`page`, `wp-page`, `wp-post`). WordPress creates the item as `draft`, enables Elementor builder mode, saves through the document adapter and verifies readback. A failed creation is hard-deleted so no broken draft is left behind.
+- **New Template** delegates to Elementor's local Template Library importer. Bridge `wp-page`/`wp-post` wrappers are mapped to Elementor's native `page` template type for this operation. The temporary JSON file is removed immediately after the native importer returns.
+
+Native `global_classes`/`global_variables` may reference site-level definitions. Smart Page/Post replacement keeps references in document content but does not claim to migrate missing global definitions between sites; the UI warns about this and the standard Elementor importer remains the cross-site route.
 
 ## Safe remote apply
 
@@ -78,20 +125,25 @@ The source repository and site JSON may share one GitHub repository only when th
 
 ## Backups
 
-Snapshots are private WordPress records. Each snapshot stores a SHA-256 fingerprint of the canonical payload and that fingerprint is verified before payload recovery. Git history is additional version history, not the sole backup. The plugin retains a bounded number of snapshots per document.
+Snapshots are private WordPress records. Each snapshot stores a SHA-256 fingerprint of the canonical payload and that fingerprint is verified before payload recovery. Git history is additional version history, not the sole backup. The plugin retains a bounded number of snapshots per document. Both GitHub remote apply and smart local replacement use this same snapshot integrity boundary.
 
 ## Runtime evidence
 
-Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress/PHP 8.3 combination with Elementor 4.2.3. It exercises the production `Documents` adapter, real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback. The 0.3.1 runtime probe also uses a minimal condition-manager double inside real WordPress to verify the actual `is_page`/`is_single` query context and queried object ID for Page versus Post lookups.
+Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress/PHP 8.3 combination with Elementor 4.2.3.
 
-Actual Elementor Pro Theme Builder condition matching remains configuration-scoped because the public CI environment contains Elementor Core only. The final modal visual/keyboard/assistive-technology behavior also remains a browser acceptance gate.
+The production `Documents` adapter is exercised for real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback. Version 0.4.0 additionally exercises smart import against real WordPress/Elementor: exact existing-Page recognition, replacement snapshot creation, replacement readback, new draft Page/Post creation, native Elementor Template creation, Product rejection and incompatible-type rejection.
 
-## Non-goals for v0.3.x
+Actual Elementor Pro Theme Builder condition matching remains configuration-scoped because the public CI environment contains Elementor Core only. The final export/import modal visual, keyboard and assistive-technology behavior also remains a browser acceptance gate.
+
+## Non-goals for v0.4.x
 
 - V3/V4 migration;
 - creating or remapping site IDs;
-- treating the multi-document site-parts bundle as a native single-template import;
-- local Product export;
+- fuzzy or AI-based import-target matching;
+- overwriting Products through smart import;
+- using the site-parts bundle to automatically overwrite its embedded header/footer during main-document import;
+- claiming smart Page/Post replacement migrates missing global classes/variables between different sites;
+- replacing Elementor's native ZIP importer;
 - proving every Elementor Pro Theme Builder condition without a Pro staging runtime;
 - proving third-party widget/add-on availability;
 - production deployment automation;

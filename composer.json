@@ -20,7 +20,7 @@
   },
   "scripts": {
     "lint": "find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l",
-    "test": "php tests/run.php && php tests/background-authorization.php && php tests/sync-roundtrip.php && php tests/secretbox-invalid-packages.php && php tests/snapshot-integrity.php && php tests/elementor-canonicalization.php && php tests/local-export.php && php tests/site-parts.php && php tests/local-export-controller.php && php tests/local-export-ui.php",
+    "test": "php tests/run.php && php tests/background-authorization.php && php tests/sync-roundtrip.php && php tests/secretbox-invalid-packages.php && php tests/snapshot-integrity.php && php tests/elementor-canonicalization.php && php tests/local-export.php && php tests/site-parts.php && php tests/local-export-controller.php && php tests/local-export-ui.php && php tests/template-import-ui.php",
     "phpcs": "phpcs --standard=phpcs.xml.dist elementor-json-bridge.php uninstall.php includes",
     "phpcbf": "phpcbf --standard=phpcs.xml.dist elementor-json-bridge.php uninstall.php includes"
   }
