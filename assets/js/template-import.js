@@ -12,13 +12,9 @@
 		CheckboxControl,
 		Modal,
 		Notice,
-		RadioControl,
 		Snackbar,
 		Spinner,
-		TextControl,
 	} = wpComponents;
-
-	let bypassNextNativeImport = false;
 
 	const request = async (path, options = {}) => {
 		const response = await fetch(`${config.restUrl}${path}`, {
@@ -51,12 +47,7 @@
 		const [file, setFile] = useState(null);
 		const [analysis, setAnalysis] = useState(null);
 		const [analyzing, setAnalyzing] = useState(false);
-		const [action, setAction] = useState('new_template');
-		const [targetId, setTargetId] = useState(0);
-		const [targetSearch, setTargetSearch] = useState('');
-		const [targets, setTargets] = useState([]);
-		const [searching, setSearching] = useState(false);
-		const [confirmed, setConfirmed] = useState(false);
+		const [replaceExisting, setReplaceExisting] = useState(false);
 		const [busy, setBusy] = useState(false);
 		const [error, setError] = useState(null);
 		const [toast, setToast] = useState(null);
@@ -65,63 +56,26 @@
 			setFile(null);
 			setAnalysis(null);
 			setAnalyzing(false);
-			setAction('new_template');
-			setTargetId(0);
-			setTargetSearch('');
-			setTargets([]);
-			setSearching(false);
-			setConfirmed(false);
+			setReplaceExisting(false);
 			setBusy(false);
 			setError(null);
 		};
 
 		useEffect(() => {
-			const handleNativeImport = (event) => {
+			const handleImportButton = (event) => {
 				const target = event.target;
 				if (!(target instanceof Element)) return;
-				const trigger = target.closest('#elementor-import-template-trigger');
+				const trigger = target.closest('.ejb-template-import-trigger');
 				if (!trigger) return;
-				if (bypassNextNativeImport) {
-					bypassNextNativeImport = false;
-					return;
-				}
 				event.preventDefault();
-				event.stopPropagation();
-				event.stopImmediatePropagation();
 				reset();
 				setToast(null);
 				setOpen(true);
 			};
 
-			document.addEventListener('click', handleNativeImport, true);
-			return () => document.removeEventListener('click', handleNativeImport, true);
+			document.addEventListener('click', handleImportButton);
+			return () => document.removeEventListener('click', handleImportButton);
 		}, []);
-
-		useEffect(() => {
-			if (!open || action !== 'replace' || !analysis?.source?.type) return undefined;
-
-			let active = true;
-			const timer = window.setTimeout(async () => {
-				setSearching(true);
-				try {
-					const params = new URLSearchParams({
-						search: targetSearch,
-						source_type: analysis.source.type,
-					});
-					const data = await request(`/template-import/targets?${params.toString()}`);
-					if (active) setTargets(Array.isArray(data.targets) ? data.targets : []);
-				} catch (searchError) {
-					if (active) setError(searchError?.message || config.strings.failed);
-				} finally {
-					if (active) setSearching(false);
-				}
-			}, 250);
-
-			return () => {
-				active = false;
-				window.clearTimeout(timer);
-			};
-		}, [open, action, analysis?.source?.type, targetSearch]);
 
 		const close = () => {
 			if (busy || analyzing) return;
@@ -129,46 +83,30 @@
 			reset();
 		};
 
-		const standardImport = () => {
-			if (busy || analyzing) return;
-			setOpen(false);
-			reset();
-			const trigger = document.getElementById('elementor-import-template-trigger');
-			if (!trigger) return;
-			bypassNextNativeImport = true;
-			window.setTimeout(() => trigger.click(), 0);
-		};
-
 		const analyzeFile = async (selectedFile) => {
 			if (!fileIsValid(selectedFile)) {
 				setError(config.strings.invalidFile);
 				setFile(null);
 				setAnalysis(null);
+				setReplaceExisting(false);
 				return;
 			}
 
 			setFile(selectedFile);
 			setAnalysis(null);
-			setAction('new_template');
-			setTargetId(0);
-			setTargetSearch('');
-			setConfirmed(false);
+			setReplaceExisting(false);
 			setError(null);
 			setAnalyzing(true);
 
 			const form = new FormData();
 			form.append('file', selectedFile);
+			form.append('destination', config.destination);
 			try {
 				const data = await request('/template-import/analyze', {
 					method: 'POST',
 					body: form,
 				});
 				setAnalysis(data);
-				if (data.recognized_target) {
-					setTargetId(Number(data.recognized_target.id || 0));
-					setTargetSearch(data.recognized_target.title || '');
-					setTargets([data.recognized_target]);
-				}
 			} catch (analyzeError) {
 				setError(analyzeError?.message || config.strings.failed);
 			} finally {
@@ -176,28 +114,11 @@
 			}
 		};
 
-		const chooseRecognized = () => {
-			const target = analysis?.recognized_target;
-			if (!target) return;
-			setAction('replace');
-			setTargetId(Number(target.id || 0));
-			setTargetSearch(target.title || '');
-			setTargets([target]);
-			setConfirmed(false);
-		};
-
 		const importJson = async () => {
 			if (!file || !analysis) return;
-			if (action === 'replace' && targetId < 1) {
-				setError(config.strings.targetRequired);
-				return;
-			}
-			if (action === 'replace' && !confirmed) {
-				setError(config.strings.confirmationRequired);
-				return;
-			}
-			if ((action === 'new_page' || action === 'new_post') && !analysis.available_actions?.[action]) {
-				setError(config.strings.pageLikeRequired);
+			const recognized = analysis.recognized_target;
+			if (replaceExisting && !recognized) {
+				setError(config.strings.failed);
 				return;
 			}
 
@@ -205,20 +126,20 @@
 			setError(null);
 			const form = new FormData();
 			form.append('file', file);
-			form.append('import_action', action);
-			form.append('target_id', String(targetId || 0));
+			form.append('destination', config.destination);
+			form.append('replace_existing', replaceExisting ? '1' : '0');
+			form.append('expected_target_id', replaceExisting ? String(recognized.id || 0) : '0');
 
 			try {
 				const data = await request('/template-import/execute', {
 					method: 'POST',
 					body: form,
 				});
+				const wasReplaced = data?.result?.action === 'replaced';
 				setOpen(false);
 				reset();
-				setToast(config.strings.imported);
-				if (action === 'new_template' && data?.result?.post_type === 'elementor_library') {
-					window.setTimeout(() => window.location.reload(), 1400);
-				}
+				setToast(wasReplaced ? config.strings.replaced : config.strings.created);
+				window.setTimeout(() => window.location.reload(), 1200);
 			} catch (importError) {
 				setError(importError?.message || config.strings.failed);
 			} finally {
@@ -258,34 +179,6 @@
 		const confidenceLabel = analysis?.recognition?.confidence === 'high'
 			? config.strings.highConfidence
 			: config.strings.mediumConfidence;
-		const actionOptions = analysis
-			? [
-				{
-					label: config.strings.replace,
-					value: 'replace',
-				},
-				{
-					label: config.strings.newPage,
-					value: 'new_page',
-					disabled: !analysis.available_actions?.new_page,
-				},
-				{
-					label: config.strings.newPost,
-					value: 'new_post',
-					disabled: !analysis.available_actions?.new_post,
-				},
-				{
-					label: config.strings.newTemplate,
-					value: 'new_template',
-				},
-			]
-			: [];
-		const actionHelp = {
-			replace: config.strings.replaceHelp,
-			new_page: config.strings.newPageHelp,
-			new_post: config.strings.newPostHelp,
-			new_template: config.strings.newTemplateHelp,
-		}[action];
 
 		const modal = h(
 			Modal,
@@ -356,89 +249,27 @@
 				recognized
 					? h(
 						'div',
-						{ className: 'ejb-template-import-match' },
+						{ className: `ejb-template-import-replace${replaceExisting ? ' is-selected' : ''}` },
 						h(
 							'div',
-							{ className: 'ejb-template-import-match__copy' },
-							h('span', { className: 'ejb-template-import-summary__eyebrow' }, `${config.strings.recognized} · ${confidenceLabel}`),
+							{ className: 'ejb-template-import-replace__match' },
+							h('span', { className: 'ejb-template-import-summary__eyebrow' }, `${config.strings.match} · ${confidenceLabel}`),
 							h('strong', null, descriptorLabel(recognized))
 						),
-						h(
-							Button,
-							{ variant: 'secondary', onClick: chooseRecognized, disabled: busy },
-							config.strings.useRecognized
-						)
-					)
-					: null,
-				analysis
-					? h(
-						Fragment,
-						null,
-						h(RadioControl, {
-							label: config.strings.chooseAction,
-							selected: action,
-							options: actionOptions,
+						h(CheckboxControl, {
+							label: config.strings.replaceExisting,
+							help: config.strings.replaceHelp,
+							checked: replaceExisting,
 							disabled: busy,
 							onChange: (value) => {
-								setAction(value);
-								setConfirmed(false);
+								setReplaceExisting(value);
 								setError(null);
 							},
-							className: 'ejb-template-import-actions-choice',
-						}),
-						h('p', { className: 'ejb-template-import-action-help' }, actionHelp),
-						action === 'replace'
-							? h(
-								'div',
-								{ className: 'ejb-template-import-target' },
-								h(TextControl, {
-									label: config.strings.target,
-									help: config.strings.searchTarget,
-									value: targetSearch,
-									disabled: busy,
-									onChange: (value) => {
-										setTargetSearch(value);
-										setTargetId(0);
-										setConfirmed(false);
-									},
-								}),
-								searching
-									? h('div', { className: 'ejb-template-import-loading ejb-template-import-loading--small', role: 'status' }, h(Spinner), h('span', null, config.strings.searching))
-									: null,
-								!searching && targets.length
-									? h(RadioControl, {
-										selected: targetId ? String(targetId) : '',
-										options: targets.map((target) => ({
-											label: descriptorLabel(target),
-											value: String(target.id),
-										})),
-										disabled: busy,
-										onChange: (value) => {
-											setTargetId(Number(value || 0));
-											setConfirmed(false);
-										},
-										className: 'ejb-template-import-target__results',
-									})
-									: null,
-								!searching && !targets.length
-									? h('p', { className: 'ejb-template-import-empty' }, config.strings.noTargets)
-									: null,
-								targetId
-									? h(
-										'div',
-										{ className: 'ejb-template-import-confirm' },
-										h(CheckboxControl, {
-											label: config.strings.confirmReplace,
-											checked: confirmed,
-											disabled: busy,
-											onChange: setConfirmed,
-										})
-									)
-									: null
-							)
-							: null
+						})
 					)
-					: null,
+					: source
+						? h('p', { className: 'ejb-template-import-empty' }, config.strings.noMatch)
+						: null,
 				error
 					? h(
 						Notice,
@@ -454,12 +285,6 @@
 				h(
 					'div',
 					{ className: 'ejb-template-import-modal__actions' },
-					h(
-						Button,
-						{ variant: 'tertiary', disabled: busy || analyzing, onClick: standardImport },
-						config.strings.standardImport
-					),
-					h('div', { className: 'ejb-template-import-modal__actions-spacer' }),
 					h(
 						Button,
 						{ variant: 'tertiary', disabled: busy || analyzing, onClick: close },
