@@ -37,6 +37,7 @@ jobs:
           find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
           node --check assets/js/admin.js
           node --check assets/js/local-export.js
+          node --check assets/js/template-import.js
           php tests/run.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
@@ -44,6 +45,7 @@ jobs:
           php tests/site-parts.php
           php tests/local-export-controller.php
           php tests/local-export-ui.php
+          php tests/template-import-ui.php
           regression_status=0
           php tests/secretbox-invalid-packages.php || regression_status=1
           php tests/snapshot-integrity.php || regression_status=1
@@ -111,6 +113,9 @@ jobs:
 
       - name: Page and post local JSON export
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-local-export.php
+
+      - name: Smart template JSON import
+        run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-template-import.php
 
       - name: Stop runtime
         if: always()
