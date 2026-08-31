@@ -24,6 +24,24 @@ if (!$admin instanceof WP_User) {
 $previous_user = get_current_user_id();
 wp_set_current_user((int) $admin->ID);
 
+register_post_type(
+    'ejb_public_content',
+    [
+        'public' => true,
+        'show_ui' => true,
+        'supports' => ['title', 'editor'],
+    ]
+);
+register_post_type(
+    'ejb_private_record',
+    [
+        'public' => false,
+        'publicly_queryable' => false,
+        'show_ui' => true,
+        'supports' => ['title', 'editor'],
+    ]
+);
+
 register_post_meta(
     'page',
     'ejb_runtime_public_meta',
@@ -117,6 +135,13 @@ try {
     }
 
     $content = new WordPressDocument(new Documents(), new PayloadValidator());
+    $managed_types = $content->post_types();
+    if (!in_array('ejb_public_content', $managed_types, true)) {
+        throw new RuntimeException('A public website custom post type was not discovered automatically.');
+    }
+    if (in_array('ejb_private_record', $managed_types, true)) {
+        throw new RuntimeException('A private admin-only post type was incorrectly exposed to GitHub synchronization.');
+    }
 
     if (!$content->supports($page_id) || !$content->supports($post_id)) {
         throw new RuntimeException('Normal Page/Post content was not discovered automatically.');
@@ -212,6 +237,8 @@ try {
             'acf_roundtrip' => true,
             'yoast_roundtrip' => class_exists('WPSEO_Meta'),
             'taxonomy_export' => true,
+            'public_custom_post_type_discovered' => true,
+            'private_admin_post_type_excluded' => true,
             'non_elementor_isolation' => true,
             'draft_creation' => true,
             'permission_denied_without_user' => true,
@@ -227,5 +254,7 @@ try {
     wp_delete_post($page_id, true);
     wp_delete_post($post_id, true);
     wp_delete_term($category_id, 'category');
+    unregister_post_type('ejb_public_content');
+    unregister_post_type('ejb_private_record');
     wp_set_current_user($previous_user);
 }
