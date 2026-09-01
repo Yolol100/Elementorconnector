@@ -29,8 +29,9 @@ WordPress content
 private GitHub repository
       ↓ reviewed change
 fresh conflict + capability checks
-      ↓ validate canonical payload
+      ↓
 integrity-checked local snapshot
+      ↓ validate canonical payload
       ↓
 WordPress / ACF / Yoast / Elementor APIs
       ↓
