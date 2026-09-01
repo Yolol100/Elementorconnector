@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -92,7 +93,7 @@ jobs:
         include:
           - label: WordPress 6.8.3 / PHP 8.1
             config: .wp-env.6.8.json
-          - label: latest WordPress / PHP 8.3
+          - label: WordPress 7.1 / PHP 8.3
             config: .wp-env.json
     steps:
       - name: Checkout

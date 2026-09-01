@@ -141,7 +141,7 @@ CI covers:
 - reproducible release packaging;
 - WordPress Plugin Check;
 - real WordPress 6.8.3 / PHP 8.1 + Elementor + ACF;
-- current WordPress / PHP 8.3 + Elementor + ACF + current Yoast;
+- WordPress 7.1 / PHP 8.3 + Elementor 4.2.3 + ACF 6.8.9 + Yoast 28.3;
 - normal non-Elementor Page/Post content roundtrip;
 - registered metadata and taxonomy export/apply;
 - ACF identity/value roundtrip;
@@ -153,10 +153,13 @@ CI covers:
 
 Production GitHub credentials, Elementor Pro Theme Builder condition resolution, and final authenticated wp-admin browser/accessibility behavior remain staging/browser evidence gates.
 
+Tagged versions run the complete quality workflow again, verify that the tag matches all canonical version sources, build the ZIP twice and create a recoverable draft GitHub Release with its SHA-256 manifest and versioned release notes. A failed asset upload can be retried while the release remains a draft; an existing published release is never modified. A draft may be published only after the documented staging/browser evidence gates pass on that exact ZIP.
+
 ## Repository layout
 
 ```text
 .github/workflows/ci.yml
+.github/workflows/release.yml
 .wp-env.json
 .wp-env.6.8.json
 assets/
@@ -171,6 +174,7 @@ scripts/build-zip.sh
 tests/
   runtime/
 docs/architecture.md
+docs/releases/
 readme.txt
 ```
 
