@@ -1,0 +1,74 @@
+name: Draft release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  verify-and-package:
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Verify tag, source and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          test "$GITHUB_REF_NAME" = "v$version"
+          test "$(sed -n 's/^ \* Version: //p' elementor-json-bridge.php)" = "$version"
+          test "$(sed -n "s/^define( 'EJB_VERSION', '\([^']*\)' );$/\1/p" elementor-json-bridge.php)" = "$version"
+          test "$(sed -n 's/^Stable tag: //p' readme.txt)" = "$version"
+          test -s "docs/releases/$version.md"
+
+      - name: Build package twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-zip.sh
+          cp dist/elementor-json-bridge.zip /tmp/elementor-json-bridge-first.zip
+          bash scripts/build-zip.sh
+          cmp --silent /tmp/elementor-json-bridge-first.zip dist/elementor-json-bridge.zip
+          sha256sum dist/elementor-json-bridge.zip > dist/elementor-json-bridge.zip.sha256
+
+      - name: Create immutable draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to replace its assets." >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            dist/elementor-json-bridge.zip \
+            dist/elementor-json-bridge.zip.sha256 \
+            --draft \
+            --notes-file "docs/releases/$version.md" \
+            --title "Elementor JSON Bridge $GITHUB_REF_NAME" \
+            --verify-tag

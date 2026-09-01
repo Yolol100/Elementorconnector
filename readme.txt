@@ -122,7 +122,7 @@ The plugin does not send WordPress content to OpenAI. ChatGPT/Codex access to th
 
 == Runtime verification ==
 
-Repository CI covers PHP 8.1 through 8.5, WordPress Coding Standards/PHP compatibility, dependency audit, reproducible package building and WordPress Plugin Check. Real `wp-env` acceptance runs against the minimum WordPress 6.8.3/PHP 8.1 environment and the current WordPress/PHP 8.3 environment with Elementor. The current runtime additionally exercises ACF and Yoast when those plugins are active.
+Repository CI covers PHP 8.1 through 8.5, WordPress Coding Standards/PHP compatibility, dependency audit, reproducible package building and WordPress Plugin Check. Real `wp-env` acceptance runs against WordPress 6.8.3/PHP 8.1/Elementor 4.2.3/ACF 6.8.9 and WordPress 7.1/PHP 8.3/Elementor 4.2.3/ACF 6.8.9/Yoast 28.3.
 
 The runtime suite covers normal non-Elementor WordPress content roundtrip, registered metadata, taxonomies, optional ACF/Yoast fields, Elementor isolation, draft creation, existing Elementor document save/readback, local Elementor export/import and snapshot integrity.
 
