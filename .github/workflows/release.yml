@@ -57,20 +57,31 @@ jobs:
             sha256sum elementor-json-bridge.zip > elementor-json-bridge.zip.sha256
           )
 
-      - name: Create immutable draft release
+      - name: Create or repair draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
+          assets=(
+            dist/elementor-json-bridge.zip
+            dist/elementor-json-bridge.zip.sha256
+          )
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing to replace its assets." >&2
-            exit 1
+            if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')" != 'true' ]; then
+              echo "Published release $GITHUB_REF_NAME already exists; refusing to modify it." >&2
+              exit 1
+            fi
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --draft \
+              --notes-file "docs/releases/$version.md" \
+              --title "Elementor JSON Bridge $GITHUB_REF_NAME"
+            exit 0
           fi
           gh release create "$GITHUB_REF_NAME" \
-            dist/elementor-json-bridge.zip \
-            dist/elementor-json-bridge.zip.sha256 \
+            "${assets[@]}" \
             --draft \
             --notes-file "docs/releases/$version.md" \
             --title "Elementor JSON Bridge $GITHUB_REF_NAME" \

@@ -153,7 +153,7 @@ CI covers:
 
 Production GitHub credentials, Elementor Pro Theme Builder condition resolution, and final authenticated wp-admin browser/accessibility behavior remain staging/browser evidence gates.
 
-Tagged versions run the complete quality workflow again, verify that the tag matches all canonical version sources, build the ZIP twice and create an immutable draft GitHub Release with its SHA-256 manifest and versioned release notes. A draft may be published only after the documented staging/browser evidence gates pass on that exact ZIP.
+Tagged versions run the complete quality workflow again, verify that the tag matches all canonical version sources, build the ZIP twice and create a recoverable draft GitHub Release with its SHA-256 manifest and versioned release notes. A failed asset upload can be retried while the release remains a draft; an existing published release is never modified. A draft may be published only after the documented staging/browser evidence gates pass on that exact ZIP.
 
 ## Repository layout
 
