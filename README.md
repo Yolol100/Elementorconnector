@@ -1,5 +1,40 @@
 # Elementor JSON Bridge
 
+> **Portfolio status:** Flagship · active development · WordPress/PHP product
+
+## At a glance
+
+Elementor JSON Bridge is a conservative, auditable bridge between WordPress and a private GitHub content repository. It is designed for reviewed content changes with conflict detection, snapshots, verified readback and rollback instead of direct database automation.
+
+| Area | Evidence |
+| --- | --- |
+| Audience | WordPress teams managing core content, ACF, Yoast and existing Elementor documents |
+| Stack | PHP, WordPress APIs, GitHub Contents API, JavaScript, Composer, wp-env |
+| Quality | PHP 8.1–8.5 checks, WPCS, dependency audit, Plugin Check and WordPress integration matrices |
+| Safety | Least-privilege repository access, capability checks, immutable identity, conflict detection and verified rollback |
+| Delivery | Reproducible release ZIP built by CI |
+
+## Quick start
+
+1. Test on a staging WordPress environment.
+2. Build and validate the plugin with the commands under [Local checks](#local-checks).
+3. Install the generated ZIP and connect a **private** content repository.
+4. Seed content, make a reviewed GitHub edit and verify WordPress readback before production use.
+
+## Architecture
+
+```text
+WordPress content
+      ↓ export/index
+private GitHub repository
+      ↓ reviewed change
+fresh conflict + capability checks
+      ↓
+WordPress / ACF / Yoast / Elementor APIs
+      ↓
+readback verification → success or snapshot rollback
+```
+
 Version 0.5.0 expands the project from an Elementor-only synchronization bridge into a conservative WordPress content bridge. After one private GitHub connection, editable WordPress content is discovered automatically and can be reviewed/edited through GitHub without a per-page enable or first-export step.
 
 ## Core flow
@@ -153,3 +188,11 @@ bash scripts/build-zip.sh
 For the content bridge the GitHub App needs Repository permissions -> **Contents: Read and write** on the selected private content repository. Do not grant Administration, Actions, Issues or unrelated repository permissions just for synchronization.
 
 A separate private repository per site/environment is the simplest setup. If source and site content intentionally share a repository, make it private and keep site content on a dedicated branch such as `site-sync`.
+
+## Project status, roadmap and support
+
+The bridge is under active development. Compatibility expansion, release packaging and staging evidence are tracked as repository work; production rollout remains an explicit staging gate. Use [GitHub Issues](https://github.com/Yolol100/Elementorconnector/issues) for reproducible bugs without credentials or customer content.
+
+## License
+
+This project is distributed under the GNU General Public License v2.0. See [LICENSE](LICENSE).
