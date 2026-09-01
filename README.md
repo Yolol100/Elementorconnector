@@ -29,10 +29,14 @@ WordPress content
 private GitHub repository
       ↓ reviewed change
 fresh conflict + capability checks
+      ↓ validate canonical payload
+integrity-checked local snapshot
       ↓
 WordPress / ACF / Yoast / Elementor APIs
       ↓
-readback verification → success or snapshot rollback
+complete readback + SHA-256 fingerprint verification
+      ├─ match → success
+      └─ failure/mismatch → snapshot restore + second verified readback
 ```
 
 Version 0.5.0 expands the project from an Elementor-only synchronization bridge into a conservative WordPress content bridge. After one private GitHub connection, editable WordPress content is discovered automatically and can be reviewed/edited through GitHub without a per-page enable or first-export step.
@@ -195,4 +199,4 @@ The bridge is under active development. Compatibility expansion, release packagi
 
 ## License
 
-This project is distributed under the GNU General Public License v2.0. See [LICENSE](LICENSE).
+This project is distributed under the GNU General Public License v2.0 or later (GPL-2.0-or-later). See [LICENSE](LICENSE).
