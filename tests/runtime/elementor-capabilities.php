@@ -35,12 +35,66 @@ if ( empty( $inventory['widgets']['heading']['controls'] ) ) {
 	WP_CLI::error( 'The Core Heading widget exposes no control inventory.' );
 }
 
+foreach ( [
+	'experiments',
+	'atomic_style_schema',
+	'atomic_dynamic_tags',
+	'global_classes',
+	'variables',
+	'components',
+	'interactions',
+] as $surface ) {
+	if ( ! isset( $inventory[ $surface ] ) || ! is_array( $inventory[ $surface ] ) ) {
+		WP_CLI::error( 'The target capability inventory is missing the ' . $surface . ' surface.' );
+	}
+}
+
+if ( empty( $inventory['experiments'] ) ) {
+	WP_CLI::error( 'The target inventory contains no registered Elementor experiment/capability states.' );
+}
+if ( empty( $inventory['atomic_style_schema'] ) ) {
+	WP_CLI::error( 'The Atomic style schema is missing from the target inventory.' );
+}
+
+$atomic_record = null;
+foreach ( array_merge( $inventory['widgets'], $inventory['elements'] ) as $record ) {
+	if ( true !== ( $record['atomic'] ?? false ) ) {
+		continue;
+	}
+	if ( empty( $record['atomic_config']['atomic_props_schema'] ) || empty( $record['atomic_config']['atomic_controls'] ) ) {
+		continue;
+	}
+	$atomic_record = $record;
+	break;
+}
+if ( null === $atomic_record ) {
+	WP_CLI::error( 'No registered Atomic component exposed both its props schema and Atomic controls.' );
+}
+if ( ! array_key_exists( 'allowed_child_types', $atomic_record['atomic_config'] ) ) {
+	WP_CLI::error( 'Atomic child-type capability evidence is missing.' );
+}
+
+$atomic_feature_seen = false;
+foreach ( $inventory['experiments'] as $name => $feature ) {
+	if ( str_contains( (string) $name, 'atomic' ) && true === ( $feature['active'] ?? false ) ) {
+		$atomic_feature_seen = true;
+		break;
+	}
+}
+if ( ! $atomic_feature_seen ) {
+	WP_CLI::error( 'No active Atomic experiment/capability was recorded.' );
+}
+
 WP_CLI::success(
 	sprintf(
-		'Elementor capability inventory verified: %d widgets, %d elements, %d document types, %d dynamic tags.',
+		'Elementor capability inventory verified: %d widgets, %d elements, %d document types, %d Dynamic Tags, %d Atomic style props, %d Classes, %d Variables, %d Components.',
 		count( $inventory['widgets'] ),
 		count( $inventory['elements'] ),
 		count( $inventory['document_types'] ),
-		count( $inventory['dynamic_tags'] )
+		count( $inventory['dynamic_tags'] ),
+		count( $inventory['atomic_style_schema'] ),
+		count( $inventory['global_classes'] ),
+		count( $inventory['variables'] ),
+		count( $inventory['components'] )
 	)
 );
