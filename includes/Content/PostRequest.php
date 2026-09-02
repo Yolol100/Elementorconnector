@@ -4,6 +4,8 @@ namespace Webactueel\ElementorJsonBridge\Content;
 
 use DateTimeImmutable;
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Elementor\Documents;
+use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -11,40 +13,23 @@ final class PostRequest {
 	public const FORMAT = 'elementor-json-bridge/manage-post';
 	public const VERSION = 1;
 
-	public function __construct( private readonly WordPressDocument $content ) {}
+	public function __construct(
+		private readonly WordPressDocument $content,
+		private readonly Documents $elementor,
+		private readonly PayloadValidator $elementor_validator
+	) {}
 
 	public function execute( array $request ): array {
 		$this->validate_request( $request );
 		$action = (string) $request['action'];
 		if ( 'create' === $action ) {
 			$request_post = (array) $request['post'];
-			$create_post  = array_intersect_key(
-				$request_post,
-				array_flip( [ 'title', 'slug', 'content', 'excerpt' ] )
-			);
-			$create = [
-				'format' => WordPressDocument::CREATE_FORMAT,
-				'version' => WordPressDocument::VERSION,
-				'request_id' => (string) $request['request_id'],
-				'post_type' => (string) $request['post_type'],
-				'post' => $create_post,
-			];
-			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ] as $key ) {
-				if ( array_key_exists( $key, $request ) ) { $create[ $key ] = $request[ $key ]; }
-			}
 			if ( 'product' === (string) $request['post_type'] ) {
 				throw new RuntimeException( 'WooCommerce products must use the manage-product request.' );
 			}
-			$id      = $this->content->create_draft( $create );
-			$payload = $this->content->payload( $id );
-			foreach ( [ 'title', 'slug', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
-				if ( array_key_exists( $field, $request_post ) ) {
-					$payload['post'][ $field ] = $request_post[ $field ];
-				}
-			}
-			$payload['post']['status'] = 'draft';
-			$this->content->apply( $id, $payload );
-			$this->apply_extended_post_fields( $id, $request_post );
+			$id = array_key_exists( 'elementor', $request )
+				? $this->create_elementor_draft( $request, $request_post )
+				: $this->create_wordpress_draft( $request, $request_post );
 			return [ 'status' => 'created', 'post_id' => $id ];
 		}
 
@@ -69,6 +54,76 @@ final class PostRequest {
 		$this->content->apply( $id, $payload );
 		$this->apply_extended_post_fields( $id, $post );
 		return [ 'status' => 'updated', 'post_id' => $id ];
+	}
+
+	private function create_wordpress_draft( array $request, array $request_post ): int {
+		$create_post = array_intersect_key(
+			$request_post,
+			array_flip( [ 'title', 'slug', 'content', 'excerpt' ] )
+		);
+		$create = [
+			'format' => WordPressDocument::CREATE_FORMAT,
+			'version' => WordPressDocument::VERSION,
+			'request_id' => (string) $request['request_id'],
+			'post_type' => (string) $request['post_type'],
+			'post' => $create_post,
+		];
+		foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $key ) {
+			if ( array_key_exists( $key, $request ) ) { $create[ $key ] = $request[ $key ]; }
+		}
+		$id      = $this->content->create_draft( $create );
+		$payload = $this->content->payload( $id );
+		foreach ( [ 'title', 'slug', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
+			if ( array_key_exists( $field, $request_post ) ) {
+				$payload['post'][ $field ] = $request_post[ $field ];
+			}
+		}
+		$payload['post']['status'] = 'draft';
+		$this->content->apply( $id, $payload );
+		$this->apply_extended_post_fields( $id, $request_post );
+		return $id;
+	}
+
+	private function create_elementor_draft( array $request, array $request_post ): int {
+		$object = get_post_type_object( (string) $request['post_type'] );
+		if ( ! $object ) {
+			throw new RuntimeException( 'The requested WordPress post type does not exist.' );
+		}
+		$create_cap = $object->cap->create_posts ?? $object->cap->edit_posts ?? 'edit_posts';
+		if ( ! current_user_can( $create_cap ) ) {
+			throw new RuntimeException( 'You are not allowed to create this WordPress content type.' );
+		}
+		$title = isset( $request_post['title'] ) && is_string( $request_post['title'] ) ? trim( $request_post['title'] ) : '';
+		if ( '' === $title ) {
+			throw new RuntimeException( 'A new Elementor document requires post.title.' );
+		}
+		if ( ! is_array( $request['elementor'] ) || array_is_list( $request['elementor'] ) ) {
+			throw new RuntimeException( 'Elementor create data must be a document object.' );
+		}
+		$elementor = $request['elementor'];
+		$elementor['title'] = $title;
+		$elementor = $this->elementor_validator->validate_array( $elementor );
+		$id = $this->elementor->create_payload( (string) $request['post_type'], $elementor );
+		try {
+			$payload = $this->content->payload( $id );
+			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ] as $section ) {
+				if ( array_key_exists( $section, $request ) ) {
+					$payload[ $section ] = 'elementor' === $section ? $elementor : $request[ $section ];
+				}
+			}
+			foreach ( [ 'title', 'slug', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
+				if ( array_key_exists( $field, $request_post ) ) {
+					$payload['post'][ $field ] = $request_post[ $field ];
+				}
+			}
+			$payload['post']['status'] = 'draft';
+			$this->content->apply( $id, $payload );
+			$this->apply_extended_post_fields( $id, $request_post );
+		} catch ( \Throwable $throwable ) {
+			wp_delete_post( $id, true );
+			throw $throwable;
+		}
+		return $id;
 	}
 
 	private function validate_request( array $request ): void {

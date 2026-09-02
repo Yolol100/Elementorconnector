@@ -17,9 +17,9 @@ use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 defined( 'ABSPATH' ) || exit;
 
 final class ContentRequests {
-	private const PROCESSED_OPTION = 'ejb_processed_content_requests';
-	private const MAX_PER_RUN      = 5;
-	private const RETENTION        = 200;
+	private const PROCESSED_OPTION  = 'ejb_processed_content_requests';
+	private const MAX_PER_RUN       = 5;
+	private const RETENTION         = 200;
 	private const MAX_REQUEST_BYTES = 1000000;
 	private const TERMINAL_STATUSES = [ 'created', 'updated', 'deleted', 'executed', 'error' ];
 
@@ -78,16 +78,17 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 2,
+			'version'               => 3,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
+			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
 			'request_path_pattern'  => trim( $root . '/requests/{request-id}.json', '/' ),
 			'new_content_status'    => 'draft',
 			'editable_sections'     => [ 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'woocommerce', 'elementor' ],
 			'request_formats'       => [
 				WordPressDocument::CREATE_FORMAT => WordPressDocument::VERSION,
-				PostRequest::FORMAT                 => PostRequest::VERSION,
-				ProductRequest::FORMAT              => ProductRequest::VERSION,
+				PostRequest::FORMAT               => PostRequest::VERSION,
+				ProductRequest::FORMAT            => ProductRequest::VERSION,
 				TaxonomyTerm::FORMAT              => TaxonomyTerm::VERSION,
 				ProductVariation::FORMAT          => ProductVariation::VERSION,
 				AbilityBridge::FORMAT             => AbilityBridge::VERSION,
@@ -96,10 +97,11 @@ final class ContentRequests {
 				'Edit existing pages, posts, products and other managed content only through the path listed in site-index.json.',
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
-				'New pages, posts and products are always created as drafts; publishing is a separate reviewed content-file change.',
+				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
+				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
 				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
 				'Create, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs.',
-				'Only registered acf/* and yoast-seo/* WordPress abilities can be executed through run-ability requests.',
+				'Only abilities listed in abilities.json can be executed through run-ability requests; supported namespaces are core/*, acf/*, yoast-seo/* and WooCommerce product abilities.',
 				'Destructive term, variation or ability operations require confirm_destructive=true.',
 			],
 		];
@@ -112,7 +114,7 @@ final class ContentRequests {
 	}
 
 	private function process_file( string $path, int $actor_id ): void {
-		$file = null;
+		$file    = null;
 		$request = [];
 		try {
 			$file = $this->github->get_file( $path );
@@ -184,8 +186,8 @@ final class ContentRequests {
 	private function execute_request( array $request ): array {
 		return match ( (string) $request['format'] ) {
 			WordPressDocument::CREATE_FORMAT => $this->created_result( $this->content->create_draft( $request ) ),
-			PostRequest::FORMAT                 => $this->posts->execute( $request ),
-			ProductRequest::FORMAT              => $this->products->execute( $request ),
+			PostRequest::FORMAT               => $this->posts->execute( $request ),
+			ProductRequest::FORMAT            => $this->products->execute( $request ),
 			TaxonomyTerm::FORMAT              => $this->terms->execute( $request ),
 			ProductVariation::FORMAT          => $this->variations->execute( $request ),
 			AbilityBridge::FORMAT             => $this->abilities->execute( $request ),

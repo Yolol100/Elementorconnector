@@ -31,6 +31,7 @@ use Webactueel\ElementorJsonBridge\Sync\ElementorCapabilities;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 use Webactueel\ElementorJsonBridge\Sync\MediaInventory;
+use Webactueel\ElementorJsonBridge\Sync\WordPressAbilities;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -49,7 +50,7 @@ final class Plugin {
 		$validator         = new PayloadValidator();
 		$woocommerce       = new WooCommerceProduct();
 		$content           = new WordPressDocument( $documents, $validator );
-		$posts             = new PostRequest( $content );
+		$posts             = new PostRequest( $content, $documents, $validator );
 		$products          = new ProductRequest( $woocommerce, $content );
 		$terms             = new TaxonomyTerm();
 		$variations        = new ProductVariation();
@@ -58,6 +59,7 @@ final class Plugin {
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
 		$capability_sync   = new ElementorCapabilities( $github );
+		$ability_sync      = new WordPressAbilities( $abilities, $github );
 		$media_sync        = new MediaInventory( $github );
 		$local_export      = new LocalExport( $documents, new SiteParts( $documents ) );
 		$template_importer = new TemplateImporter( $documents, $validator, $snapshots, $lock );
@@ -71,6 +73,7 @@ final class Plugin {
 		( new TemplateImportController( $template_importer ) )->register();
 		( new Scheduler( $sync ) )->register();
 		$capability_sync->register();
+		$ability_sync->register();
 		$media_sync->register();
 		( new ContentRequests( $content, $posts, $products, $terms, $variations, $abilities, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();

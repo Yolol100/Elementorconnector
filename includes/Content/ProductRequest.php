@@ -3,7 +3,6 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
-
 defined( 'ABSPATH' ) || exit;
 
 final class ProductRequest {
@@ -59,6 +58,9 @@ final class ProductRequest {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting a WooCommerce product requires confirm_destructive=true.' );
 			}
+			if ( ! current_user_can( 'delete_post', $id ) ) {
+				throw new RuntimeException( 'You are not allowed to delete this WooCommerce product.' );
+			}
 			$product = wc_get_product( $id );
 			$product->delete( true );
 			return [ 'status' => 'deleted', 'product_id' => $id ];
@@ -79,16 +81,16 @@ final class ProductRequest {
 	}
 
 	private function result( string $status, int $id ): array {
-		$post = get_post( $id );
+		$product = wc_get_product( $id );
 		return [
 			'status' => $status,
 			'product_id' => $id,
 			'post' => [
-				'title' => $post instanceof \WP_Post ? (string) $post->post_title : '',
-				'status' => $post instanceof \WP_Post ? (string) $post->post_status : '',
-				'content' => $post instanceof \WP_Post ? (string) $post->post_content : '',
-				'excerpt' => $post instanceof \WP_Post ? (string) $post->post_excerpt : '',
-				'featured_image' => (int) get_post_thumbnail_id( $id ),
+				'title' => $product instanceof \WC_Product ? (string) $product->get_name( 'edit' ) : '',
+				'status' => $product instanceof \WC_Product ? (string) $product->get_status( 'edit' ) : '',
+				'content' => $product instanceof \WC_Product ? (string) $product->get_description( 'edit' ) : '',
+				'excerpt' => $product instanceof \WC_Product ? (string) $product->get_short_description( 'edit' ) : '',
+				'featured_image' => $product instanceof \WC_Product ? (int) $product->get_image_id( 'edit' ) : 0,
 			],
 			'woocommerce' => $this->products->payload( $id ),
 		];
@@ -116,11 +118,10 @@ final class ProductRequest {
 	}
 
 	private function apply_core( int $id, array $data, bool $creating ): void {
-		$allowed = [ 'title', 'slug', 'status', 'content', 'excerpt', 'featured_image', 'menu_order', 'comment_status' ];
+		$allowed = [ 'title', 'slug', 'status', 'content', 'excerpt', 'featured_image', 'menu_order', 'comment_status', 'password' ];
 		if ( array_diff( array_keys( $data ), $allowed ) ) {
 			throw new RuntimeException( 'The product request contains unsupported core post fields.' );
 		}
-		$update = [ 'ID' => $id ];
 		if ( array_key_exists( 'status', $data ) ) {
 			if ( ! is_string( $data['status'] ) || ! in_array( $data['status'], get_post_stati( [], 'names' ), true ) || in_array( $data['status'], [ 'auto-draft', 'trash' ], true ) ) {
 				throw new RuntimeException( 'The requested WooCommerce product status is invalid.' );
@@ -132,32 +133,54 @@ final class ProductRequest {
 				}
 			}
 		}
-		$map = [ 'title' => 'post_title', 'slug' => 'post_name', 'status' => 'post_status', 'content' => 'post_content', 'excerpt' => 'post_excerpt', 'menu_order' => 'menu_order', 'comment_status' => 'comment_status' ];
-		foreach ( $map as $key => $wp_key ) {
-			if ( ! array_key_exists( $key, $data ) ) { continue; }
-			if ( 'menu_order' === $key ) {
-				if ( ! is_int( $data[ $key ] ) ) { throw new RuntimeException( 'Product menu_order must be an integer.' ); }
-			} elseif ( ! is_string( $data[ $key ] ) ) {
+		$product = wc_get_product( $id );
+		if ( ! $product instanceof \WC_Product ) {
+			throw new RuntimeException( 'The requested WooCommerce product no longer exists.' );
+		}
+		foreach ( [ 'title', 'slug', 'content', 'excerpt', 'comment_status', 'password' ] as $field ) {
+			if ( array_key_exists( $field, $data ) && ! is_string( $data[ $field ] ) ) {
 				throw new RuntimeException( 'A product core text field is invalid.' );
 			}
-			$update[ $wp_key ] = $data[ $key ];
 		}
-		if ( $creating ) { $update['post_status'] = 'draft'; }
-		if ( count( $update ) > 1 ) {
-			$result = wp_update_post( wp_slash( $update ), true );
-			if ( is_wp_error( $result ) ) { throw new RuntimeException( 'WordPress rejected the product post update.' ); }
+		if ( array_key_exists( 'menu_order', $data ) && ! is_int( $data['menu_order'] ) ) {
+			throw new RuntimeException( 'Product menu_order must be an integer.' );
+		}
+		if ( array_key_exists( 'featured_image', $data ) && ( ! is_int( $data['featured_image'] ) || $data['featured_image'] < 0 ) ) {
+			throw new RuntimeException( 'Product featured_image must be an attachment ID or 0.' );
+		}
+		if ( array_key_exists( 'title', $data ) ) { $product->set_name( $data['title'] ); }
+		if ( array_key_exists( 'slug', $data ) ) { $product->set_slug( $data['slug'] ); }
+		if ( array_key_exists( 'content', $data ) ) { $product->set_description( $data['content'] ); }
+		if ( array_key_exists( 'excerpt', $data ) ) { $product->set_short_description( $data['excerpt'] ); }
+		if ( array_key_exists( 'menu_order', $data ) ) { $product->set_menu_order( $data['menu_order'] ); }
+		if ( array_key_exists( 'comment_status', $data ) ) {
+			if ( ! in_array( $data['comment_status'], [ 'open', 'closed' ], true ) ) {
+				throw new RuntimeException( 'Product comment_status must be open or closed.' );
+			}
+			$product->set_reviews_allowed( 'open' === $data['comment_status'] );
+		}
+		if ( array_key_exists( 'password', $data ) ) {
+			if ( ! method_exists( $product, 'set_post_password' ) ) {
+				throw new RuntimeException( 'This WooCommerce version does not support product passwords.' );
+			}
+			$product->set_post_password( $data['password'] );
 		}
 		if ( array_key_exists( 'featured_image', $data ) ) {
-			if ( ! is_int( $data['featured_image'] ) || $data['featured_image'] < 0 ) { throw new RuntimeException( 'Product featured_image must be an attachment ID or 0.' ); }
-			if ( 0 === $data['featured_image'] ) { delete_post_thumbnail( $id ); }
-			else {
-				$attachment = get_post( $data['featured_image'] );
-				if ( ! $attachment instanceof \WP_Post || 'attachment' !== $attachment->post_type ) { throw new RuntimeException( 'The requested product featured image does not exist.' ); }
-				set_post_thumbnail( $id, $data['featured_image'] );
+			if ( 0 !== $data['featured_image'] && ! wp_attachment_is_image( $data['featured_image'] ) ) {
+				throw new RuntimeException( 'The requested product featured image does not exist.' );
 			}
+			$product->set_image_id( $data['featured_image'] );
+		}
+		$status = $creating ? 'draft' : ( $data['status'] ?? null );
+		if ( null !== $status ) {
+			$product->set_status( $status );
+		}
+		try {
+			$product->save();
+		} catch ( \Throwable $throwable ) {
+			throw new RuntimeException( 'WooCommerce rejected the core product update: ' . $throwable->getMessage(), 0, $throwable );
 		}
 	}
-
 
 	private function apply_content_extensions( int $id, array $request ): void {
 		$sections = [ 'acf', 'yoast', 'registered_meta', 'elementor' ];
