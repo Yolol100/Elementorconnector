@@ -3,7 +3,7 @@
   "core": "https://wordpress.org/wordpress-6.8.3.zip",
   "phpVersion": "8.1",
   "plugins": [
-    "https://downloads.wordpress.org/plugin/elementor.4.2.3.zip",
+    "https://downloads.wordpress.org/plugin/elementor.4.2.4.zip",
     "https://downloads.wordpress.org/plugin/advanced-custom-fields.6.8.9.zip",
     "."
   ],
