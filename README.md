@@ -24,10 +24,10 @@ Elementor JSON Bridge is a conservative, auditable bridge between WordPress and 
 ## Architecture
 
 ```text
-WordPress content
-      ↓ export/index
+WordPress content + Elementor runtime capabilities
+      ↓ export/index/inventory
 private GitHub repository
-      ↓ reviewed change
+      ↓ reviewed change (content only)
 fresh conflict + capability checks
       ↓
 integrity-checked local snapshot
@@ -71,6 +71,7 @@ Default root: `site-data`.
 site-data/
   bridge.json
   site-index.json
+  elementor-capabilities.json
   content/
     pages/42.json
     posts/91.json
@@ -81,6 +82,8 @@ site-data/
 ```
 
 `bridge.json` is the machine-readable protocol contract. `site-index.json` maps every discovered managed item to its canonical GitHub path, WordPress ID, post type, title, slug and feature flags.
+
+`elementor-capabilities.json` is a read-only target snapshot. It records the installed Elementor/Core/Pro environment, active plugins and the widgets, layout/Atomic elements, document/template types, Dynamic Tags and controls actually registered on that site. It is availability evidence for planning and validation; it is never applied back to WordPress and never authorizes installing or choosing an add-on just because it is popular. See `docs/elementor-capability-inventory.md` for the full contract.
 
 Existing content must be edited at the exact path listed in `site-index.json`. The `source.id` and `source.post_type` inside an existing content file are stable identity and cannot be reassigned through GitHub.
 
@@ -120,6 +123,7 @@ Optional `taxonomies`, `acf`, `yoast` and `registered_meta` sections can be supp
 - ACF updates fail closed when the field key/type identity differs from the exported field.
 - Yoast metadata fails closed if Yoast is unavailable; calculated score/indexable data is not synchronized.
 - Elementor data can only be applied to an existing Elementor-builder document. Normal WordPress content is never silently converted into Elementor.
+- The Elementor capability inventory is read-only against WordPress/Elementor and writes only its deterministic snapshot into the same private site repository.
 - Both the live WordPress fingerprint and the GitHub SHA/fingerprint are rechecked before apply. Both sides changing from the same base becomes an explicit conflict.
 - Every apply creates an integrity-checked local snapshot, performs API-based writes, reads the complete envelope back, and compares the canonical SHA-256 fingerprint.
 - Apply/readback failure triggers snapshot restore and a second readback verification.
@@ -140,8 +144,9 @@ CI covers:
 - PHP 8.1-8.5 syntax, WPCS/PHP compatibility and dependency audit;
 - reproducible release packaging;
 - WordPress Plugin Check;
-- real WordPress 6.8.3 / PHP 8.1 + Elementor + ACF;
-- WordPress 7.1 / PHP 8.3 + Elementor 4.2.3 + ACF 6.8.9 + Yoast 28.3;
+- real WordPress 6.8.3 / PHP 8.1 + Elementor 4.2.4 + ACF;
+- WordPress 7.1 / PHP 8.3 + Elementor 4.2.4 + ACF 6.8.9 + Yoast 28.3;
+- real target capability collection for registered Elementor widgets, elements, document types and Dynamic Tags;
 - normal non-Elementor Page/Post content roundtrip;
 - registered metadata and taxonomy export/apply;
 - ACF identity/value roundtrip;
@@ -151,7 +156,7 @@ CI covers:
 - existing Elementor save/readback and local import/export regressions;
 - snapshot-integrity and rollback regressions.
 
-Production GitHub credentials, Elementor Pro Theme Builder condition resolution, and final authenticated wp-admin browser/accessibility behavior remain staging/browser evidence gates.
+Production GitHub credentials, Elementor Pro Theme Builder condition resolution, third-party add-on combinations, and final authenticated wp-admin browser/accessibility behavior remain staging/browser evidence gates.
 
 Tagged versions run the complete quality workflow again, verify that the tag matches all canonical version sources, build the ZIP twice and create a recoverable draft GitHub Release with its SHA-256 manifest and versioned release notes. A failed asset upload can be retried while the release remains a draft; an existing published release is never modified. A draft may be published only after the documented staging/browser evidence gates pass on that exact ZIP.
 
@@ -168,12 +173,15 @@ includes/
   Backup/
   Content/WordPressDocument.php
   Elementor/
+    Capabilities.php
   GitHub/
   Sync/
+    ElementorCapabilities.php
 scripts/build-zip.sh
 tests/
   runtime/
 docs/architecture.md
+docs/elementor-capability-inventory.md
 docs/releases/
 readme.txt
 ```
@@ -200,7 +208,7 @@ A separate private repository per site/environment is the simplest setup. If sou
 
 ## Project status, roadmap and support
 
-The bridge is under active development. Compatibility expansion, release packaging and staging evidence are tracked as repository work; production rollout remains an explicit staging gate. Use [GitHub Issues](https://github.com/Yolol100/Elementorconnector/issues) for reproducible bugs without credentials or customer content.
+The bridge is under active development. Compatibility expansion, release packaging and staging evidence are tracked as repository work; production rollout remains an explicit staging gate. Use GitHub Issues for reproducible bugs without credentials or customer content.
 
 ## License
 
