@@ -32,7 +32,18 @@ final class PostRequest {
 			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ] as $key ) {
 				if ( array_key_exists( $key, $request ) ) { $create[ $key ] = $request[ $key ]; }
 			}
-			$id = $this->content->create_draft( $create );
+			if ( 'product' === (string) $request['post_type'] ) {
+				throw new RuntimeException( 'WooCommerce products must use the manage-product request.' );
+			}
+			$id      = $this->content->create_draft( $create );
+			$payload = $this->content->payload( $id );
+			foreach ( [ 'title', 'slug', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
+				if ( array_key_exists( $field, $request_post ) ) {
+					$payload['post'][ $field ] = $request_post[ $field ];
+				}
+			}
+			$payload['post']['status'] = 'draft';
+			$this->content->apply( $id, $payload );
 			$this->apply_extended_post_fields( $id, $request_post );
 			return [ 'status' => 'created', 'post_id' => $id ];
 		}
