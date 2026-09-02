@@ -42,6 +42,7 @@ jobs:
           php tests/run.php
           php tests/elementor-capabilities.php
           php tests/capability-package.php
+          php tests/media-package.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
           php tests/wordpress-content-sync.php
@@ -115,6 +116,9 @@ jobs:
 
       - name: Elementor target capability inventory
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-capabilities.php
+
+      - name: WordPress media inventory and Elementor media reference validation
+        run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/media-inventory.php
 
       - name: Generic WordPress content, ACF and Yoast roundtrip
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/wordpress-content.php
