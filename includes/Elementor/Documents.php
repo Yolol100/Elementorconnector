@@ -3,7 +3,6 @@
 namespace Webactueel\ElementorJsonBridge\Elementor;
 
 use RuntimeException;
-
 defined( 'ABSPATH' ) || exit;
 
 final class Documents {
@@ -25,6 +24,53 @@ final class Documents {
 		$payload['content']       = is_array( $payload['content'] ) ? $payload['content'] : [];
 
 		return $payload;
+	}
+
+	public function create_payload( string $post_type, array $payload ): int {
+		if ( ! class_exists( '\\Elementor\\Plugin' ) ) {
+			throw new RuntimeException( 'Elementor is not active.' );
+		}
+		$manager = \Elementor\Plugin::$instance->documents ?? null;
+		if ( ! is_object( $manager ) || ! method_exists( $manager, 'create' ) || ! method_exists( $manager, 'get_document_type' ) ) {
+			throw new RuntimeException( 'The Elementor document manager is unavailable.' );
+		}
+		$type = (string) ( $payload['type'] ?? '' );
+		$class = $manager->get_document_type( $type, false );
+		if ( ! is_string( $class ) || ! class_exists( $class ) || ! method_exists( $class, 'get_property' ) ) {
+			throw new RuntimeException( 'The requested Elementor document type is not registered.' );
+		}
+		$post_types = $class::get_property( 'cpt' );
+		if ( ! is_array( $post_types ) || ! in_array( $post_type, $post_types, true ) ) {
+			throw new RuntimeException( 'The requested Elementor document type does not support this WordPress post type.' );
+		}
+		$document = $manager->create(
+			$type,
+			[
+				'post_type'   => $post_type,
+				'post_status' => 'draft',
+				'post_title'  => (string) ( $payload['title'] ?? '' ),
+			]
+		);
+		if ( is_wp_error( $document ) ) {
+			throw new RuntimeException( 'Elementor rejected the requested document type.' );
+		}
+		if ( ! is_object( $document ) || ! method_exists( $document, 'get_main_id' ) ) {
+			throw new RuntimeException( 'Elementor did not return a document.' );
+		}
+		$post_id = (int) $document->get_main_id();
+		if ( $post_id < 1 || $post_type !== get_post_type( $post_id ) ) {
+			if ( $post_id > 0 ) {
+				wp_delete_post( $post_id, true );
+			}
+			throw new RuntimeException( 'Elementor created an unexpected WordPress content type.' );
+		}
+		try {
+			$this->save_payload( $post_id, $payload );
+		} catch ( \Throwable $throwable ) {
+			wp_delete_post( $post_id, true );
+			throw $throwable;
+		}
+		return $post_id;
 	}
 
 	public function save_payload( int $post_id, array $payload ): void {

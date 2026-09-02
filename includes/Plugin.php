@@ -9,6 +9,13 @@ use Webactueel\ElementorJsonBridge\Admin\RestController;
 use Webactueel\ElementorJsonBridge\Admin\TemplateImportController;
 use Webactueel\ElementorJsonBridge\Admin\TemplateImportUi;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
+use Webactueel\ElementorJsonBridge\Content\AbilityBridge;
+use Webactueel\ElementorJsonBridge\Content\PostRequest;
+use Webactueel\ElementorJsonBridge\Content\ProductRequest;
+use Webactueel\ElementorJsonBridge\Content\ProductVariation;
+use Webactueel\ElementorJsonBridge\Content\TaxonomyTerm;
+use Webactueel\ElementorJsonBridge\Content\WooCommerceProduct;
+use Webactueel\ElementorJsonBridge\Content\WooCommerceProductExtras;
 use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\Cron\Scheduler;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
@@ -25,6 +32,7 @@ use Webactueel\ElementorJsonBridge\Sync\ElementorCapabilities;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 use Webactueel\ElementorJsonBridge\Sync\MediaInventory;
+use Webactueel\ElementorJsonBridge\Sync\WordPressAbilities;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -41,11 +49,19 @@ final class Plugin {
 		$github            = new Client( $auth );
 		$documents         = new Documents();
 		$validator         = new PayloadValidator();
+		$woocommerce       = new WooCommerceProduct();
+		$woocommerce_extra = new WooCommerceProductExtras();
 		$content           = new WordPressDocument( $documents, $validator );
+		$posts             = new PostRequest( $content, $documents, $validator );
+		$products          = new ProductRequest( $woocommerce, $woocommerce_extra, $content );
+		$terms             = new TaxonomyTerm();
+		$variations        = new ProductVariation();
+		$abilities         = new AbilityBridge();
 		$snapshots         = new Snapshots();
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
 		$capability_sync   = new ElementorCapabilities( $github );
+		$ability_sync      = new WordPressAbilities( $abilities, $github );
 		$media_sync        = new MediaInventory( $github );
 		$local_export      = new LocalExport( $documents, new SiteParts( $documents ) );
 		$template_importer = new TemplateImporter( $documents, $validator, $snapshots, $lock );
@@ -59,8 +75,9 @@ final class Plugin {
 		( new TemplateImportController( $template_importer ) )->register();
 		( new Scheduler( $sync ) )->register();
 		$capability_sync->register();
+		$ability_sync->register();
 		$media_sync->register();
-		( new ContentRequests( $content, $github, $sync ) )->register();
+		( new ContentRequests( $content, $posts, $products, $terms, $variations, $abilities, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 100, 3 );
 
