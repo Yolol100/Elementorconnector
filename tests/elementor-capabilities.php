@@ -63,9 +63,13 @@ assert_same( [], $inventory['document_types'] ?? null, 'Document types must fail
 assert_same( [], $inventory['dynamic_tags'] ?? null, 'Dynamic Tags must fail closed when Elementor is unavailable.' );
 
 $sync_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Sync/ElementorCapabilities.php' );
-assert_contains( "assert_private_repository", $sync_source, 'Capability synchronization must keep the private-repository gate.' );
-assert_contains( "/elementor-capabilities.json", $sync_source, 'Capability synchronization must use the documented machine path.' );
-assert_contains( "ejb_poll_remote", $sync_source, 'Capability synchronization must reuse the existing bounded polling hook.' );
+assert_contains( 'assert_private_repository', $sync_source, 'Capability synchronization must keep the private-repository gate.' );
+assert_contains( '/elementor-capabilities.json', $sync_source, 'Capability synchronization must use the documented machine path.' );
+assert_contains( 'ejb_poll_remote', $sync_source, 'Capability synchronization must reuse the existing bounded polling hook.' );
+assert_contains( 'HOUR_IN_SECONDS', $sync_source, 'Capability scans must be throttled between ordinary polling cycles.' );
+assert_contains( 'activated_plugin', $sync_source, 'Plugin activation must invalidate the capability scan throttle.' );
+assert_contains( 'deactivated_plugin', $sync_source, 'Plugin deactivation must invalidate the capability scan throttle.' );
+assert_contains( 'upgrader_process_complete', $sync_source, 'Plugin updates must invalidate the capability scan throttle.' );
 
 $plugin_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Plugin.php' );
 assert_contains( 'new ElementorCapabilities( $github )', $plugin_source, 'The capability sync service must be registered by the plugin bootstrap.' );
