@@ -7,6 +7,8 @@ use RuntimeException;
 defined( 'ABSPATH' ) || exit;
 
 final class AbilityBridge {
+	private const MAX_OUTPUT_BYTES = 1000000;
+
 	public const FORMAT  = 'elementor-json-bridge/run-ability';
 	public const VERSION = 1;
 
@@ -64,7 +66,24 @@ final class AbilityBridge {
 		if ( is_wp_error( $output ) ) {
 			throw new RuntimeException( 'The requested ACF or Yoast ability was rejected: ' . $output->get_error_message() );
 		}
+		$output = $this->json_safe_output( $output );
 		return [ 'status' => 'executed', 'ability' => $name, 'output' => $output ];
+	}
+
+
+	private function json_safe_output( mixed $output ): mixed {
+		$encoded = wp_json_encode( $output );
+		if ( ! is_string( $encoded ) ) {
+			throw new RuntimeException( 'The ACF or Yoast ability returned output that cannot be represented as JSON.' );
+		}
+		if ( self::MAX_OUTPUT_BYTES < strlen( $encoded ) ) {
+			throw new RuntimeException( 'The ACF or Yoast ability output is too large for the GitHub bridge.' );
+		}
+		$decoded = json_decode( $encoded, true );
+		if ( JSON_ERROR_NONE !== json_last_error() ) {
+			throw new RuntimeException( 'The ACF or Yoast ability returned invalid JSON output.' );
+		}
+		return $decoded;
 	}
 
 	private function allowed_name( string $name ): bool {
