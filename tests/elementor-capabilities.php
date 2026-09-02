@@ -57,10 +57,22 @@ assert_same( 'elementor-json-bridge/elementor-capabilities', $inventory['format'
 assert_same( 1, $inventory['version'] ?? null, 'Unexpected capability inventory version.' );
 assert_same( false, $inventory['elementor_available'] ?? null, 'Elementor should be unavailable in the zero-dependency test.' );
 assert_same( '4.2.4', $inventory['environment']['active_plugins'][0]['version'] ?? null, 'Active plugin versions must be exported.' );
-assert_same( [], $inventory['widgets'] ?? null, 'Widgets must fail closed when Elementor is unavailable.' );
-assert_same( [], $inventory['elements'] ?? null, 'Elements must fail closed when Elementor is unavailable.' );
-assert_same( [], $inventory['document_types'] ?? null, 'Document types must fail closed when Elementor is unavailable.' );
-assert_same( [], $inventory['dynamic_tags'] ?? null, 'Dynamic Tags must fail closed when Elementor is unavailable.' );
+
+foreach ( [
+	'widgets',
+	'elements',
+	'document_types',
+	'dynamic_tags',
+	'experiments',
+	'atomic_style_schema',
+	'atomic_dynamic_tags',
+	'global_classes',
+	'variables',
+	'components',
+	'interactions',
+] as $surface ) {
+	assert_same( [], $inventory[ $surface ] ?? null, $surface . ' must fail closed when Elementor is unavailable.' );
+}
 
 $sync_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Sync/ElementorCapabilities.php' );
 assert_contains( 'assert_private_repository', $sync_source, 'Capability synchronization must keep the private-repository gate.' );
@@ -75,6 +87,20 @@ $package_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/El
 assert_contains( '/elementor-capabilities.json', $package_source, 'Capability packaging must use the documented manifest path.' );
 assert_contains( 'MAX_SHARD_BYTES', $package_source, 'Capability packaging must enforce a shard size boundary.' );
 assert_contains( 'inventory_sha256', $package_source, 'Capability packaging must bind shards to the complete inventory fingerprint.' );
+assert_contains( 'atomic_style_schema', $package_source, 'Atomic style schema must use the bounded shard contract.' );
+assert_contains( 'global_classes', $package_source, 'Global Classes must use the bounded shard contract.' );
+assert_contains( 'variables', $package_source, 'Variables must use the bounded shard contract.' );
+assert_contains( 'components', $package_source, 'Components must use the bounded shard contract.' );
+
+$atomic_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Elementor/AtomicCapabilities.php' );
+assert_contains( 'atomic_props_schema', $atomic_source, 'Atomic props schema must be exported.' );
+assert_contains( 'atomic_controls', $atomic_source, 'Atomic controls must be exported.' );
+assert_contains( 'Style_Schema', $atomic_source, 'Atomic style schema integration is missing.' );
+assert_contains( 'Dynamic_Tags_Module', $atomic_source, 'Atomic Dynamic Tags integration is missing.' );
+assert_contains( 'Global_Classes_Repository', $atomic_source, 'Global Classes integration is missing.' );
+assert_contains( 'Variables_Repository', $atomic_source, 'Variables integration is missing.' );
+assert_contains( 'Components_Repository', $atomic_source, 'Components integration is missing.' );
+assert_contains( "get_modules( 'interactions' )", $atomic_source, 'Interactions integration is missing.' );
 
 $plugin_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Plugin.php' );
 assert_contains( 'new ElementorCapabilities( $github )', $plugin_source, 'The capability sync service must be registered by the plugin bootstrap.' );
