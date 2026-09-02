@@ -65,7 +65,7 @@ $assert(str_contains($posts, 'rollback could not be verified') && str_contains($
 $assert(str_contains($elementorDocuments, 'create_payload(') && str_contains($elementorDocuments, '$manager->get_document_type(') && str_contains($elementorDocuments, '$manager->create('), 'Elementor document creation does not validate and use the official document manager.');
 
 $assert(str_contains($products, "'elementor-json-bridge/manage-product'") && str_contains($products, 'publish_products'), 'WooCommerce product CRUD or publish capability checks are missing.');
-$assert(str_contains($products, "[ 'acf', 'yoast', 'registered_meta', 'elementor' ]"), 'Product ACF/Yoast/registered-meta/Elementor extensions are not routed through the managed content layer.');
+$assert(str_contains($products, "[ 'taxonomies', 'acf', 'yoast', 'registered_meta' ]") && str_contains($products, "array_key_exists( 'elementor', \$request )") && str_contains($products, "\$desired['elementor'] = \$request['elementor'];"), 'Product ACF/Yoast/registered-meta/Elementor extensions are not routed through the managed content layer.');
 $assert(!str_contains($products, 'wp_update_post('), 'Product core writes still bypass WooCommerce CRUD.');
 $assert(str_contains($woo, 'wc_get_product(') && str_contains($woo, '$product->save()') && !str_contains($woo, 'update_post_meta('), 'WooCommerce product data is not using WooCommerce CRUD exclusively.');
 $assert(str_contains($products, 'set_name(') && str_contains($products, 'set_description(') && str_contains($products, 'set_short_description(') && str_contains($products, 'set_image_id('), 'WooCommerce core product fields are not routed through WC_Product setters.');
