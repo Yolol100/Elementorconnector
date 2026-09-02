@@ -300,7 +300,7 @@ final class Capabilities {
 			''              => 'unknown',
 			default         => 'third-party',
 		};
-		return [ 'owner' => $owner, 'plugin_slug' => $plugin_slug ?: null ];
+		return [ 'owner' => $owner, 'plugin_slug' => '' !== $plugin_slug ? $plugin_slug : null ];
 	}
 
 	private static function active_plugins(): array {
