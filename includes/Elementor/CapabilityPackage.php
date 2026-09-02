@@ -8,13 +8,41 @@ use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 defined( 'ABSPATH' ) || exit;
 
 final class CapabilityPackage {
-	private const MAX_SHARD_BYTES  = 500000;
+	private const MAX_SHARD_BYTES    = 500000;
 	private const MAX_MANIFEST_BYTES = 900000;
 	private const SURFACES = [
 		'widgets',
 		'elements',
 		'document_types',
 		'dynamic_tags',
+		'experiments',
+		'atomic_style_schema',
+		'atomic_dynamic_tags',
+		'global_classes',
+		'variables',
+		'components',
+		'interactions',
+	];
+
+	private const SUMMARY_KEYS = [
+		'id',
+		'uid',
+		'name',
+		'title',
+		'label',
+		'type',
+		'owner',
+		'plugin_slug',
+		'atomic',
+		'active',
+		'release_status',
+		'default',
+		'hidden',
+		'is_archived',
+		'cpt',
+		'show_in_library',
+		'register_type',
+		'is_editable',
 	];
 
 	public static function build( array $inventory, string $root ): array {
@@ -43,12 +71,7 @@ final class CapabilityPackage {
 				];
 
 				foreach ( array_keys( $shard['records'] ) as $name ) {
-					$record = $records[ $name ];
-					if ( is_array( $record ) ) {
-						unset( $record['controls'] );
-						$record['shard'] = $path;
-					}
-					$manifest[ $surface ][ $name ] = $record;
+					$manifest[ $surface ][ $name ] = self::summarize_record( $records[ $name ], $path );
 				}
 			}
 		}
@@ -64,6 +87,21 @@ final class CapabilityPackage {
 			'manifest_content' => $manifest_content,
 			'shards'           => $shards,
 		];
+	}
+
+	private static function summarize_record( mixed $record, string $path ): array {
+		$summary = [ 'shard' => $path ];
+		if ( ! is_array( $record ) ) {
+			return $summary;
+		}
+
+		foreach ( self::SUMMARY_KEYS as $key ) {
+			if ( array_key_exists( $key, $record ) ) {
+				$summary[ $key ] = $record[ $key ];
+			}
+		}
+
+		return $summary;
 	}
 
 	private static function split_surface( string $surface, array $records, string $version_root, string $inventory_hash ): array {
