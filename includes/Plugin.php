@@ -9,6 +9,12 @@ use Webactueel\ElementorJsonBridge\Admin\RestController;
 use Webactueel\ElementorJsonBridge\Admin\TemplateImportController;
 use Webactueel\ElementorJsonBridge\Admin\TemplateImportUi;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
+use Webactueel\ElementorJsonBridge\Content\AbilityBridge;
+use Webactueel\ElementorJsonBridge\Content\PostRequest;
+use Webactueel\ElementorJsonBridge\Content\ProductRequest;
+use Webactueel\ElementorJsonBridge\Content\ProductVariation;
+use Webactueel\ElementorJsonBridge\Content\TaxonomyTerm;
+use Webactueel\ElementorJsonBridge\Content\WooCommerceProduct;
 use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\Cron\Scheduler;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
@@ -41,7 +47,13 @@ final class Plugin {
 		$github            = new Client( $auth );
 		$documents         = new Documents();
 		$validator         = new PayloadValidator();
+		$woocommerce       = new WooCommerceProduct();
 		$content           = new WordPressDocument( $documents, $validator );
+		$posts             = new PostRequest( $content );
+		$products          = new ProductRequest( $woocommerce, $content );
+		$terms             = new TaxonomyTerm();
+		$variations        = new ProductVariation();
+		$abilities         = new AbilityBridge();
 		$snapshots         = new Snapshots();
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
@@ -60,7 +72,7 @@ final class Plugin {
 		( new Scheduler( $sync ) )->register();
 		$capability_sync->register();
 		$media_sync->register();
-		( new ContentRequests( $content, $github, $sync ) )->register();
+		( new ContentRequests( $content, $posts, $products, $terms, $variations, $abilities, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 100, 3 );
 
