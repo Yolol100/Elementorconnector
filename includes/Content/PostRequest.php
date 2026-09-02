@@ -17,18 +17,23 @@ final class PostRequest {
 		$this->validate_request( $request );
 		$action = (string) $request['action'];
 		if ( 'create' === $action ) {
+			$request_post = (array) $request['post'];
+			$create_post  = array_intersect_key(
+				$request_post,
+				array_flip( [ 'title', 'slug', 'content', 'excerpt' ] )
+			);
 			$create = [
 				'format' => WordPressDocument::CREATE_FORMAT,
 				'version' => WordPressDocument::VERSION,
 				'request_id' => (string) $request['request_id'],
 				'post_type' => (string) $request['post_type'],
-				'post' => (array) $request['post'],
+				'post' => $create_post,
 			];
 			foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ] as $key ) {
 				if ( array_key_exists( $key, $request ) ) { $create[ $key ] = $request[ $key ]; }
 			}
 			$id = $this->content->create_draft( $create );
-			$this->apply_extended_post_fields( $id, (array) $request['post'] );
+			$this->apply_extended_post_fields( $id, $request_post );
 			return [ 'status' => 'created', 'post_id' => $id ];
 		}
 
@@ -46,7 +51,7 @@ final class PostRequest {
 		foreach ( [ 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ] as $section ) {
 			if ( array_key_exists( $section, $request ) ) { $payload[ $section ] = $request[ $section ]; }
 		}
-		$post = (array) $request['post'];
+		$post = is_array( $request['post'] ?? null ) ? $request['post'] : [];
 		foreach ( [ 'title', 'slug', 'status', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
 			if ( array_key_exists( $field, $post ) ) { $payload['post'][ $field ] = $post[ $field ]; }
 		}
