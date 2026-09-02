@@ -10,6 +10,7 @@ Elementor JSON Bridge is a narrow synchronization, export and re-import boundary
 - **Plugin sync layer**: GitHub transport, auth, validation, canonicalization, conflict detection, snapshots, rollback and verification.
 - **Plugin local export layer**: read-only page/post download, product exclusion and optional Theme Builder site-part resolution.
 - **Plugin Page/Post import layer**: JSON upload validation, destination-scoped target recognition, checkbox-controlled replace/create intent, draft creation, shared document locking, replacement snapshots, readback and rollback verification.
+- **Elementor target capability layer**: read-only discovery of the exact registered Core/Pro/add-on widgets, elements, document types, Dynamic Tags and exposed controls for the connected target.
 - **Elementor native Templates import**: remains the owner of normal Template Library and ZIP import behavior; the plugin does not intercept that trigger.
 - **Private GitHub content repo or private site-data branch**: reviewable/versioned JSON transport and history.
 - **ChatGPT/Codex**: optional reviewed editor of repository JSON; never trusted as runtime proof.
@@ -117,6 +118,18 @@ Native `global_classes`/`global_variables` may reference site-level definitions.
 11. On mismatch/error, the snapshot is rehashed and must match its stored integrity fingerprint before rollback is allowed.
 12. A damaged/tampered snapshot is rejected rather than trusted as recovery data.
 
+## Target Elementor capability inventory
+
+The connected private site repository also receives `site-data/elementor-capabilities.json`. This artifact is separate from editable WordPress content and is never applied back to WordPress.
+
+The collector records the exact target environment plus registered widgets, layout/Atomic elements, Elementor document/template types and Dynamic Tags. Widget/element/tag records identify whether the runtime owner is Elementor Core, Elementor Pro or a third-party plugin and expose the controls needed for target-bound planning. Classic Form `submit_actions` choice keys are bounded and treated as availability evidence only.
+
+The collector is fail-soft around optional or version-sensitive Elementor managers and controls. Missing surfaces produce stable warning codes rather than invented capabilities. The synchronizer preserves the existing private-repository gate and adds no public endpoint.
+
+A full inventory check is throttled to once per hour during normal polling. Plugin activation, deactivation or updater completion invalidates that throttle so the next poll can refresh sooner. Because the serialized payload is deterministic, unchanged capability state does not create an extra GitHub commit.
+
+This inventory can prove that an add-on widget/element/tag is registered on the target. It does not prove that an add-on should be installed, that a chosen composition renders correctly, or that Forms, Theme Builder, WooCommerce or other site-bound behavior works end-to-end.
+
 ## Credential boundary
 
 GitHub user tokens are encrypted at rest with libsodium Secretbox when available or AES-256-GCM through OpenSSL as a fallback. The serialized encrypted package is treated as untrusted stored data during readback. Before decryption the plugin validates the algorithm marker and algorithm-specific structure, including exact Sodium nonce length and AES-GCM IV/tag lengths. Malformed packages fail closed through the plugin's normal `RuntimeException` boundary instead of leaking crypto-library exceptions.
@@ -142,15 +155,15 @@ Snapshots are private WordPress records. Each snapshot stores a SHA-256 fingerpr
 
 ## Runtime evidence
 
-Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress/PHP 8.3 combination with Elementor 4.2.3.
+Repository CI includes real WordPress + MySQL + Elementor acceptance via `wp-env`, in addition to controlled regressions and static checks. The runtime matrix covers the minimum supported WordPress 6.8.3/PHP 8.1 combination and the current WordPress 7.1/PHP 8.3 combination with Elementor 4.2.4.
 
-The production `Documents` adapter is exercised for real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback. Version 0.4.1 additionally exercises destination-scoped Page/Post recognition, fail-closed ambiguous matching, shared-lock rejection, stale analyzed-target rejection, checked replacement snapshot/readback, unchecked draft Page/Post creation, Product destination rejection and specialized non-Page source rejection.
+The production `Documents` adapter is exercised for real Elementor save/readback, snapshot integrity rejection, a real `edit_post` denial path, local Page/Post export, Product exclusion and the no-Pro site-part fallback. Target capability coverage additionally requires a real registered widget inventory, element inventory, document-type inventory and Dynamic Tags surface from the same Elementor runtime. Version 0.4.1 additionally exercises destination-scoped Page/Post recognition, fail-closed ambiguous matching, shared-lock rejection, stale analyzed-target rejection, checked replacement snapshot/readback, unchecked draft Page/Post creation, Product destination rejection and specialized non-Page source rejection.
 
 Source-contract coverage also asserts that Elementor's native Templates trigger is no longer intercepted and that both GitHub sync and local replacement receive the same lock instance from the plugin bootstrap.
 
 Actual Elementor Pro Theme Builder condition matching remains configuration-scoped because the public CI environment contains Elementor Core only. The final export/import modal visual, keyboard and assistive-technology behavior also remains a browser acceptance gate.
 
-## Non-goals for v0.4.x
+## Remaining non-goals
 
 - V3/V4 migration;
 - creating or remapping site IDs;
@@ -160,7 +173,7 @@ Actual Elementor Pro Theme Builder condition matching remains configuration-scop
 - claiming Page/Post import migrates missing global classes/variables between different sites;
 - replacing or intercepting Elementor's native Templates/ZIP importer;
 - proving every Elementor Pro Theme Builder condition without a Pro staging runtime;
-- proving third-party widget/add-on availability;
+- auto-installing, activating or choosing third-party add-ons merely because they are popular;
 - production deployment automation;
 - OpenAI/MCP integration inside WordPress;
 - generic Git hosting providers;
