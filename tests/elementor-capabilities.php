@@ -64,12 +64,17 @@ assert_same( [], $inventory['dynamic_tags'] ?? null, 'Dynamic Tags must fail clo
 
 $sync_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Sync/ElementorCapabilities.php' );
 assert_contains( 'assert_private_repository', $sync_source, 'Capability synchronization must keep the private-repository gate.' );
-assert_contains( '/elementor-capabilities.json', $sync_source, 'Capability synchronization must use the documented machine path.' );
+assert_contains( 'CapabilityPackage::build', $sync_source, 'Capability synchronization must use the bounded package builder.' );
 assert_contains( 'ejb_poll_remote', $sync_source, 'Capability synchronization must reuse the existing bounded polling hook.' );
 assert_contains( 'HOUR_IN_SECONDS', $sync_source, 'Capability scans must be throttled between ordinary polling cycles.' );
 assert_contains( 'activated_plugin', $sync_source, 'Plugin activation must invalidate the capability scan throttle.' );
 assert_contains( 'deactivated_plugin', $sync_source, 'Plugin deactivation must invalidate the capability scan throttle.' );
 assert_contains( 'upgrader_process_complete', $sync_source, 'Plugin updates must invalidate the capability scan throttle.' );
+
+$package_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Elementor/CapabilityPackage.php' );
+assert_contains( '/elementor-capabilities.json', $package_source, 'Capability packaging must use the documented manifest path.' );
+assert_contains( 'MAX_SHARD_BYTES', $package_source, 'Capability packaging must enforce a shard size boundary.' );
+assert_contains( 'inventory_sha256', $package_source, 'Capability packaging must bind shards to the complete inventory fingerprint.' );
 
 $plugin_source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/Plugin.php' );
 assert_contains( 'new ElementorCapabilities( $github )', $plugin_source, 'The capability sync service must be registered by the plugin bootstrap.' );
