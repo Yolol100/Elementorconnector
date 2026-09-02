@@ -41,6 +41,7 @@ jobs:
           node --check assets/js/template-import.js
           php tests/run.php
           php tests/elementor-capabilities.php
+          php tests/capability-package.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
           php tests/wordpress-content-sync.php
