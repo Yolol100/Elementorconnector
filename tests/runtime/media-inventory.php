@@ -65,10 +65,10 @@ if ( ! in_array( $attachment_id, $manifest_ids, true ) ) {
 	WP_CLI::error( 'The media manifest does not reference the runtime attachment.' );
 }
 
-References::assert_id_url( $attachment_id, (string) $item['url'] );
+Inventory::assert_id_url( $attachment_id, (string) $item['url'] );
 $mismatch_rejected = false;
 try {
-	References::assert_id_url( $attachment_id, 'https://example.invalid/invented.png' );
+	Inventory::assert_id_url( $attachment_id, 'https://example.invalid/invented.png' );
 } catch ( RuntimeException ) {
 	$mismatch_rejected = true;
 }
