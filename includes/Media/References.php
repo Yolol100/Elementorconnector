@@ -2,9 +2,13 @@
 
 namespace Webactueel\ElementorJsonBridge\Media;
 
+use RuntimeException;
+
 defined( 'ABSPATH' ) || exit;
 
 final class References {
+	private const MAX_DEPTH = 64;
+
 	public static function assert_featured_image( int $attachment_id ): void {
 		if ( 0 >= $attachment_id ) {
 			return;
@@ -15,12 +19,15 @@ final class References {
 	public static function assert_elementor_payload( array $payload ): void {
 		foreach ( [ 'page_settings', 'content' ] as $key ) {
 			if ( array_key_exists( $key, $payload ) ) {
-				self::walk( $payload[ $key ] );
+				self::walk( $payload[ $key ], 0 );
 			}
 		}
 	}
 
-	private static function walk( mixed $value ): void {
+	private static function walk( mixed $value, int $depth ): void {
+		if ( $depth > self::MAX_DEPTH ) {
+			throw new RuntimeException( 'Elementor media reference nesting is too deep.' );
+		}
 		if ( ! is_array( $value ) ) {
 			return;
 		}
@@ -34,7 +41,7 @@ final class References {
 		}
 
 		foreach ( $value as $child ) {
-			self::walk( $child );
+			self::walk( $child, $depth + 1 );
 		}
 	}
 }
