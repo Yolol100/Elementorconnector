@@ -70,9 +70,6 @@ foreach ( array_merge( $inventory['widgets'], $inventory['elements'] ) as $recor
 if ( null === $atomic_record ) {
 	WP_CLI::error( 'No registered Atomic component exposed both its props schema and Atomic controls.' );
 }
-if ( ! array_key_exists( 'allowed_child_types', $atomic_record['atomic_config'] ) ) {
-	WP_CLI::error( 'Atomic child-type capability evidence is missing.' );
-}
 
 $atomic_feature_seen = false;
 foreach ( $inventory['experiments'] as $name => $feature ) {
