@@ -24,6 +24,7 @@ use Webactueel\ElementorJsonBridge\Sync\ContentRequests;
 use Webactueel\ElementorJsonBridge\Sync\ElementorCapabilities;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
+use Webactueel\ElementorJsonBridge\Sync\MediaInventory;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -45,6 +46,7 @@ final class Plugin {
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
 		$capability_sync   = new ElementorCapabilities( $github );
+		$media_sync        = new MediaInventory( $github );
 		$local_export      = new LocalExport( $documents, new SiteParts( $documents ) );
 		$template_importer = new TemplateImporter( $documents, $validator, $snapshots, $lock );
 
@@ -57,6 +59,7 @@ final class Plugin {
 		( new TemplateImportController( $template_importer ) )->register();
 		( new Scheduler( $sync ) )->register();
 		$capability_sync->register();
+		$media_sync->register();
 		( new ContentRequests( $content, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 100, 3 );
