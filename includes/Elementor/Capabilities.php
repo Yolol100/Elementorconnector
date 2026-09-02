@@ -28,6 +28,13 @@ final class Capabilities {
 				'elements'            => [],
 				'document_types'      => [],
 				'dynamic_tags'        => [],
+				'experiments'         => [],
+				'atomic_style_schema' => [],
+				'atomic_dynamic_tags' => [],
+				'global_classes'      => [],
+				'variables'           => [],
+				'components'          => [],
+				'interactions'        => [],
 				'warnings'            => [],
 			];
 		}
@@ -36,6 +43,7 @@ final class Capabilities {
 		$environment['active_devices'] = self::active_devices( $elementor );
 		$environment['active_breakpoints'] = self::active_breakpoints( $elementor );
 		$warnings = [];
+		$atomic = AtomicCapabilities::collect( $elementor, $warnings );
 
 		return [
 			'format'              => 'elementor-json-bridge/elementor-capabilities',
@@ -46,6 +54,13 @@ final class Capabilities {
 			'elements'            => self::collect_elements( $elementor, $warnings ),
 			'document_types'      => self::collect_document_types( $elementor, $warnings ),
 			'dynamic_tags'        => self::collect_dynamic_tags( $elementor, $warnings ),
+			'experiments'         => $atomic['experiments'],
+			'atomic_style_schema' => $atomic['atomic_style_schema'],
+			'atomic_dynamic_tags' => $atomic['atomic_dynamic_tags'],
+			'global_classes'      => $atomic['global_classes'],
+			'variables'           => $atomic['variables'],
+			'components'          => $atomic['components'],
+			'interactions'        => $atomic['interactions'],
 			'warnings'            => array_values( array_unique( $warnings ) ),
 		];
 	}
@@ -92,17 +107,12 @@ final class Capabilities {
 			return [];
 		}
 
-		$atomic_utils = '\\Elementor\\Modules\\AtomicWidgets\\Utils\\Utils';
 		foreach ( (array) $elements as $name => $element ) {
 			if ( ! is_object( $element ) ) {
 				continue;
 			}
 			try {
-				$record = self::component_record( $element, (string) $name, $warnings );
-				$record['atomic'] = class_exists( $atomic_utils ) && method_exists( $atomic_utils, 'is_atomic' )
-					? (bool) $atomic_utils::is_atomic( $element )
-					: null;
-				$result[ (string) $name ] = $record;
+				$result[ (string) $name ] = self::component_record( $element, (string) $name, $warnings );
 			} catch ( Throwable ) {
 				$warnings[] = 'element_skipped:' . sanitize_key( (string) $name );
 			}
@@ -189,7 +199,7 @@ final class Capabilities {
 
 	private static function component_record( object $component, string $fallback_name, array &$warnings ): array {
 		$owner = self::detect_owner( $component );
-		return [
+		$record = [
 			'name'        => method_exists( $component, 'get_name' ) ? (string) $component->get_name() : $fallback_name,
 			'title'       => method_exists( $component, 'get_title' ) ? wp_strip_all_tags( (string) $component->get_title() ) : $fallback_name,
 			'owner'       => $owner['owner'],
@@ -197,6 +207,8 @@ final class Capabilities {
 			'categories'  => method_exists( $component, 'get_categories' ) ? array_values( array_map( 'strval', (array) $component->get_categories() ) ) : [],
 			'controls'    => self::collect_controls( $component, $warnings ),
 		];
+
+		return array_merge( $record, AtomicCapabilities::describe_component( $component, $warnings ) );
 	}
 
 	private static function collect_controls( object $component, array &$warnings ): array {
