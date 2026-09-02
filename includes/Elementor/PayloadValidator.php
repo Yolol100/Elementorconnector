@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Elementor;
 
 use JsonException;
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Media\References;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -68,6 +69,9 @@ final class PayloadValidator {
 		$this->nodes     = 0;
 		$this->ids       = [];
 		$this->validate_elements( $data['content'], 0 );
+		if ( function_exists( 'wp_attachment_is_image' ) ) {
+			References::assert_elementor_payload( $data );
+		}
 
 		return $data;
 	}
