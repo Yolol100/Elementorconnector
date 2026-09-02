@@ -65,8 +65,13 @@ final class Capabilities {
 		}
 
 		foreach ( (array) $widgets as $name => $widget ) {
-			if ( is_object( $widget ) ) {
+			if ( ! is_object( $widget ) ) {
+				continue;
+			}
+			try {
 				$result[ (string) $name ] = self::component_record( $widget, (string) $name, $warnings );
+			} catch ( Throwable ) {
+				$warnings[] = 'widget_skipped:' . sanitize_key( (string) $name );
 			}
 		}
 		ksort( $result );
@@ -92,11 +97,15 @@ final class Capabilities {
 			if ( ! is_object( $element ) ) {
 				continue;
 			}
-			$record = self::component_record( $element, (string) $name, $warnings );
-			$record['atomic'] = class_exists( $atomic_utils ) && method_exists( $atomic_utils, 'is_atomic' )
-				? (bool) $atomic_utils::is_atomic( $element )
-				: null;
-			$result[ (string) $name ] = $record;
+			try {
+				$record = self::component_record( $element, (string) $name, $warnings );
+				$record['atomic'] = class_exists( $atomic_utils ) && method_exists( $atomic_utils, 'is_atomic' )
+					? (bool) $atomic_utils::is_atomic( $element )
+					: null;
+				$result[ (string) $name ] = $record;
+			} catch ( Throwable ) {
+				$warnings[] = 'element_skipped:' . sanitize_key( (string) $name );
+			}
 		}
 		ksort( $result );
 		return $result;
@@ -159,16 +168,20 @@ final class Capabilities {
 			if ( ! $tag ) {
 				continue;
 			}
-			$owner = self::detect_owner( $tag );
-			$result[ (string) $name ] = [
-				'name'        => method_exists( $tag, 'get_name' ) ? (string) $tag->get_name() : (string) $name,
-				'title'       => method_exists( $tag, 'get_title' ) ? wp_strip_all_tags( (string) $tag->get_title() ) : (string) $name,
-				'owner'       => $owner['owner'],
-				'plugin_slug' => $owner['plugin_slug'],
-				'group'       => method_exists( $tag, 'get_group' ) && is_scalar( $tag->get_group() ) ? (string) $tag->get_group() : null,
-				'categories'  => method_exists( $tag, 'get_categories' ) ? array_values( array_map( 'strval', (array) $tag->get_categories() ) ) : [],
-				'controls'    => self::collect_controls( $tag, $warnings ),
-			];
+			try {
+				$owner = self::detect_owner( $tag );
+				$result[ (string) $name ] = [
+					'name'        => method_exists( $tag, 'get_name' ) ? (string) $tag->get_name() : (string) $name,
+					'title'       => method_exists( $tag, 'get_title' ) ? wp_strip_all_tags( (string) $tag->get_title() ) : (string) $name,
+					'owner'       => $owner['owner'],
+					'plugin_slug' => $owner['plugin_slug'],
+					'group'       => method_exists( $tag, 'get_group' ) && is_scalar( $tag->get_group() ) ? (string) $tag->get_group() : null,
+					'categories'  => method_exists( $tag, 'get_categories' ) ? array_values( array_map( 'strval', (array) $tag->get_categories() ) ) : [],
+					'controls'    => self::collect_controls( $tag, $warnings ),
+				];
+			} catch ( Throwable ) {
+				$warnings[] = 'dynamic_tag_skipped:' . sanitize_key( (string) $name );
+			}
 		}
 		ksort( $result );
 		return $result;
