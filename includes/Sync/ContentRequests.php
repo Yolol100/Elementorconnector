@@ -17,11 +17,13 @@ use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 defined( 'ABSPATH' ) || exit;
 
 final class ContentRequests {
-	private const PROCESSED_OPTION  = 'ejb_processed_content_requests';
-	private const MAX_PER_RUN       = 5;
-	private const RETENTION         = 200;
-	private const MAX_REQUEST_BYTES = 1000000;
-	private const TERMINAL_STATUSES = [ 'created', 'updated', 'deleted', 'executed', 'error' ];
+	private const PROCESSED_OPTION    = 'ejb_processed_content_requests';
+	private const PROCESS_LOCK_OPTION = 'ejb_content_requests_lock';
+	private const PROCESS_LOCK_TTL    = 600;
+	private const MAX_PER_RUN         = 5;
+	private const RETENTION           = 200;
+	private const MAX_REQUEST_BYTES   = 1000000;
+	private const TERMINAL_STATUSES   = [ 'created', 'updated', 'deleted', 'executed', 'error' ];
 
 	public function __construct(
 		private readonly WordPressDocument $content,
@@ -46,31 +48,39 @@ final class ContentRequests {
 		if ( $actor_id < 1 || ! user_can( $actor_id, Hooks::CAPABILITY ) ) {
 			return;
 		}
-		$root      = (string) Settings::get( 'repo_root', 'site-data' );
-		$directory = trim( $root . '/requests', '/' );
-		try {
-			$this->github->assert_private_repository();
-			$this->ensure_manifest( $root );
-			$entries = $this->github->list_directory( $directory );
-		} catch ( Throwable ) {
+		$lock_token = $this->acquire_process_lock();
+		if ( '' === $lock_token ) {
 			return;
 		}
+		try {
+			$root      = (string) Settings::get( 'repo_root', 'site-data' );
+			$directory = trim( $root . '/requests', '/' );
+			try {
+				$this->github->assert_private_repository();
+				$this->ensure_manifest( $root );
+				$entries = $this->github->list_directory( $directory );
+			} catch ( Throwable ) {
+				return;
+			}
 
-		$processed_count = 0;
-		foreach ( $entries as $entry ) {
-			if ( $processed_count >= self::MAX_PER_RUN ) {
-				break;
+			$processed_count = 0;
+			foreach ( $entries as $entry ) {
+				if ( $processed_count >= self::MAX_PER_RUN ) {
+					break;
+				}
+				if ( 'file' !== ( $entry['type'] ?? '' ) ) {
+					continue;
+				}
+				$name = (string) ( $entry['name'] ?? '' );
+				if ( ! str_ends_with( strtolower( $name ), '.json' ) ) {
+					continue;
+				}
+				$path = (string) ( $entry['path'] ?? trim( $directory . '/' . $name, '/' ) );
+				$this->process_file( $path, $actor_id );
+				++$processed_count;
 			}
-			if ( 'file' !== ( $entry['type'] ?? '' ) ) {
-				continue;
-			}
-			$name = (string) ( $entry['name'] ?? '' );
-			if ( ! str_ends_with( strtolower( $name ), '.json' ) ) {
-				continue;
-			}
-			$path = (string) ( $entry['path'] ?? trim( $directory . '/' . $name, '/' ) );
-			$this->process_file( $path, $actor_id );
-			++$processed_count;
+		} finally {
+			$this->release_process_lock( $lock_token );
 		}
 	}
 
@@ -78,13 +88,14 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 3,
+			'version'               => 4,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
 			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
 			'request_path_pattern'  => trim( $root . '/requests/{request-id}.json', '/' ),
 			'new_content_status'    => 'draft',
-			'editable_sections'     => [ 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'woocommerce', 'elementor' ],
+			'editable_sections'     => [ 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor' ],
+			'request_only_sections' => [ 'woocommerce' ],
 			'request_formats'       => [
 				WordPressDocument::CREATE_FORMAT => WordPressDocument::VERSION,
 				PostRequest::FORMAT               => PostRequest::VERSION,
@@ -94,15 +105,18 @@ final class ContentRequests {
 				AbilityBridge::FORMAT             => AbilityBridge::VERSION,
 			],
 			'rules'                 => [
-				'Edit existing pages, posts, products and other managed content only through the path listed in site-index.json.',
+				'Edit the common WordPress/ACF/Yoast/Elementor envelope only through the exact path listed in site-index.json.',
+				'Use manage-product requests for WooCommerce catalog fields so product writes use WooCommerce CRUD and exact readback.',
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
 				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
 				'Create, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs.',
+				'Product delete moves the product to trash by default. Permanent deletion additionally requires force=true.',
 				'Only abilities listed in abilities.json can be executed through run-ability requests; supported namespaces are core/*, acf/*, yoast-seo/* and WooCommerce product abilities.',
-				'Destructive term, variation or ability operations require confirm_destructive=true.',
+				'Destructive term, product, variation or ability operations require confirm_destructive=true.',
+				'Only one request-processing poll may execute at a time; stale process locks expire after ten minutes.',
 			],
 		];
 		$encoded = CanonicalJson::encode( $manifest, true );
@@ -180,6 +194,34 @@ final class ContentRequests {
 			} catch ( Throwable ) {
 				return;
 			}
+		}
+	}
+
+	private function acquire_process_lock(): string {
+		$token = wp_generate_uuid4();
+		$value = wp_json_encode( [ 'token' => $token, 'created_at' => time() ] );
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+		if ( add_option( self::PROCESS_LOCK_OPTION, $value, '', false ) ) {
+			return $token;
+		}
+		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
+		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
+		if ( is_array( $data ) && time() - (int) ( $data['created_at'] ?? time() ) > self::PROCESS_LOCK_TTL ) {
+			delete_option( self::PROCESS_LOCK_OPTION );
+			if ( add_option( self::PROCESS_LOCK_OPTION, $value, '', false ) ) {
+				return $token;
+			}
+		}
+		return '';
+	}
+
+	private function release_process_lock( string $token ): void {
+		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
+		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
+		if ( is_array( $data ) && hash_equals( (string) ( $data['token'] ?? '' ), $token ) ) {
+			delete_option( self::PROCESS_LOCK_OPTION );
 		}
 	}
 

@@ -3,6 +3,7 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -28,14 +29,21 @@ final class TaxonomyTerm {
 			if ( '' === $name ) {
 				throw new RuntimeException( 'Creating a taxonomy term requires a name.' );
 			}
-			$args = $this->core_args( $data, true );
+			$args   = $this->core_args( $data, true );
 			$result = wp_insert_term( $name, $taxonomy, $args );
 			if ( is_wp_error( $result ) ) {
 				throw new RuntimeException( 'WordPress rejected the taxonomy term creation.' );
 			}
 			$term_id = (int) $result['term_id'];
-			$this->apply_extensions( $term_id, $taxonomy, $data );
-			return [ 'status' => 'created', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $this->payload( $term_id, $taxonomy ) ];
+			try {
+				$this->apply_extensions( $term_id, $taxonomy, $data );
+				$readback = $this->payload( $term_id, $taxonomy );
+				$this->assert_requested_state( $readback, $data );
+			} catch ( \Throwable $throwable ) {
+				wp_delete_term( $term_id, $taxonomy );
+				throw $throwable;
+			}
+			return [ 'status' => 'created', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
 		}
 
 		$term_id = (int) ( $request['term_id'] ?? 0 );
@@ -52,8 +60,8 @@ final class TaxonomyTerm {
 				throw new RuntimeException( 'Deleting a taxonomy term requires confirm_destructive=true.' );
 			}
 			$result = wp_delete_term( $term_id, $taxonomy );
-			if ( true !== $result ) {
-				throw new RuntimeException( 'WordPress could not delete the requested taxonomy term.' );
+			if ( true !== $result || get_term( $term_id, $taxonomy ) instanceof \WP_Term ) {
+				throw new RuntimeException( 'WordPress could not verify deletion of the requested taxonomy term.' );
 			}
 			return [ 'status' => 'deleted', 'taxonomy' => $taxonomy, 'term_id' => $term_id ];
 		}
@@ -61,6 +69,8 @@ final class TaxonomyTerm {
 		if ( ! current_user_can( $object->cap->edit_terms ) ) {
 			throw new RuntimeException( 'You are not allowed to edit terms in this taxonomy.' );
 		}
+		$before = $this->payload( $term_id, $taxonomy );
+		$this->validate_extensions( $term_id, $taxonomy, $data );
 		$core = $this->core_args( $data, false );
 		if ( isset( $data['name'] ) ) {
 			if ( ! is_string( $data['name'] ) || '' === trim( $data['name'] ) ) {
@@ -68,14 +78,42 @@ final class TaxonomyTerm {
 			}
 			$core['name'] = $data['name'];
 		}
-		if ( $core ) {
-			$result = wp_update_term( $term_id, $taxonomy, $core );
-			if ( is_wp_error( $result ) ) {
-				throw new RuntimeException( 'WordPress rejected the taxonomy term update.' );
+		try {
+			if ( $core ) {
+				$result = wp_update_term( $term_id, $taxonomy, $core );
+				if ( is_wp_error( $result ) ) {
+					throw new RuntimeException( 'WordPress rejected the taxonomy term update.' );
+				}
 			}
+			$this->apply_extensions( $term_id, $taxonomy, $data );
+			$readback = $this->payload( $term_id, $taxonomy );
+			$this->assert_requested_state( $readback, $data );
+		} catch ( \Throwable $apply_error ) {
+			try {
+				$restored = wp_update_term(
+					$term_id,
+					$taxonomy,
+					[
+						'name'        => $before['name'],
+						'slug'        => $before['slug'],
+						'description' => $before['description'],
+						'parent'      => $before['parent'],
+					]
+				);
+				if ( is_wp_error( $restored ) ) {
+					throw new RuntimeException( 'WordPress rejected taxonomy rollback.' );
+				}
+				$this->apply_acf( $term_id, $before['acf'] );
+				$this->apply_yoast( $term_id, $taxonomy, $before['yoast'] );
+				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $term_id, $taxonomy ) ) ) ) {
+					throw new RuntimeException( 'Taxonomy rollback failed exact readback verification.' );
+				}
+			} catch ( \Throwable $rollback_error ) {
+				throw new RuntimeException( 'Taxonomy update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
+			}
+			throw new RuntimeException( 'Taxonomy update failed. The previous term state was restored.', 0, $apply_error );
 		}
-		$this->apply_extensions( $term_id, $taxonomy, $data );
-		return [ 'status' => 'updated', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $this->payload( $term_id, $taxonomy ) ];
+		return [ 'status' => 'updated', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
 	}
 
 	public function inventory(): array {
@@ -140,7 +178,7 @@ final class TaxonomyTerm {
 				if ( ! is_string( $data[ $field ] ) ) {
 					throw new RuntimeException( 'A taxonomy term text field is invalid.' );
 				}
-				$args[ $field ] = $data[ $field ];
+				$args[ $field ] = 'slug' === $field ? sanitize_title( $data[ $field ] ) : $data[ $field ];
 			}
 		}
 		if ( array_key_exists( 'parent', $data ) ) {
@@ -170,12 +208,43 @@ final class TaxonomyTerm {
 		];
 	}
 
+	private function validate_extensions( int $term_id, string $taxonomy, array $data ): void {
+		if ( array_key_exists( 'acf', $data ) ) {
+			$this->validate_acf( $term_id, $data['acf'] );
+		}
+		if ( array_key_exists( 'yoast', $data ) ) {
+			$this->validate_yoast( $term_id, $taxonomy, $data['yoast'] );
+		}
+	}
+
 	private function apply_extensions( int $term_id, string $taxonomy, array $data ): void {
 		if ( array_key_exists( 'acf', $data ) ) {
 			$this->apply_acf( $term_id, $data['acf'] );
 		}
 		if ( array_key_exists( 'yoast', $data ) ) {
 			$this->apply_yoast( $term_id, $taxonomy, $data['yoast'] );
+		}
+	}
+
+	private function assert_requested_state( array $readback, array $requested ): void {
+		foreach ( [ 'name', 'slug', 'description', 'parent' ] as $field ) {
+			if ( ! array_key_exists( $field, $requested ) ) {
+				continue;
+			}
+			$expected = 'slug' === $field ? sanitize_title( $requested[ $field ] ) : $requested[ $field ];
+			if ( $readback[ $field ] !== $expected ) {
+				throw new RuntimeException( 'Taxonomy term core data failed readback verification.' );
+			}
+		}
+		foreach ( [ 'acf', 'yoast' ] as $section ) {
+			if ( ! array_key_exists( $section, $requested ) ) {
+				continue;
+			}
+			foreach ( $requested[ $section ] as $key => $value ) {
+				if ( ! array_key_exists( $key, $readback[ $section ] ) || CanonicalJson::hash( [ 'value' => $readback[ $section ][ $key ] ] ) !== CanonicalJson::hash( [ 'value' => $value ] ) ) {
+					throw new RuntimeException( 'Taxonomy extension data failed readback verification.' );
+				}
+			}
 		}
 	}
 
@@ -198,7 +267,7 @@ final class TaxonomyTerm {
 		return $result;
 	}
 
-	private function apply_acf( int $term_id, mixed $acf ): void {
+	private function validate_acf( int $term_id, mixed $acf ): void {
 		if ( ! is_array( $acf ) || ( [] !== $acf && array_is_list( $acf ) ) ) {
 			throw new RuntimeException( 'Taxonomy ACF data must be an object.' );
 		}
@@ -215,6 +284,12 @@ final class TaxonomyTerm {
 			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys || $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
 				throw new RuntimeException( 'The ACF taxonomy field identity no longer matches the site.' );
 			}
+		}
+	}
+
+	private function apply_acf( int $term_id, mixed $acf ): void {
+		$this->validate_acf( $term_id, $acf );
+		foreach ( $acf as $field ) {
 			update_field( (string) $field['key'], $field['value'], 'term_' . $term_id );
 		}
 	}
@@ -227,7 +302,7 @@ final class TaxonomyTerm {
 		return is_array( $values ) ? $values : [];
 	}
 
-	private function apply_yoast( int $term_id, string $taxonomy, mixed $yoast ): void {
+	private function validate_yoast( int $term_id, string $taxonomy, mixed $yoast ): void {
 		if ( ! is_array( $yoast ) || ( [] !== $yoast && array_is_list( $yoast ) ) ) {
 			throw new RuntimeException( 'Yoast taxonomy data must be an object.' );
 		}
@@ -247,6 +322,18 @@ final class TaxonomyTerm {
 			if ( ! is_string( $key ) || ! array_key_exists( $key, $current ) ) {
 				throw new RuntimeException( 'The Yoast taxonomy request contains an unsupported field.' );
 			}
+		}
+	}
+
+	private function apply_yoast( int $term_id, string $taxonomy, mixed $yoast ): void {
+		$this->validate_yoast( $term_id, $taxonomy, $yoast );
+		if ( [] === $yoast ) {
+			return;
+		}
+		$term    = get_term( $term_id, $taxonomy );
+		$current = $term instanceof \WP_Term ? \WPSEO_Taxonomy_Meta::get_term_meta( $term, $taxonomy ) : [];
+		$current = is_array( $current ) ? $current : [];
+		foreach ( $yoast as $key => $value ) {
 			$current[ $key ] = $value;
 		}
 		\WPSEO_Taxonomy_Meta::set_values( $term_id, $taxonomy, $current );

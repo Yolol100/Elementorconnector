@@ -44,9 +44,10 @@ final class WordPressAbilities {
 			$catalog = $this->abilities->catalog();
 			$payload = [
 				'format'                  => 'elementor-json-bridge/ability-catalog',
-				'version'                 => 1,
+				'version'                 => 2,
 				'wordpress_version'       => (string) get_bloginfo( 'version' ),
 				'abilities_api_available' => (bool) ( $catalog['available'] ?? false ),
+				'integrations'            => $this->integrations(),
 				'abilities'               => is_array( $catalog['abilities'] ?? null ) ? $catalog['abilities'] : [],
 			];
 			$content = CanonicalJson::encode( $payload, true );
@@ -63,5 +64,33 @@ final class WordPressAbilities {
 		} catch ( Throwable ) {
 			set_transient( self::CHECK_TRANSIENT, '1', 5 * MINUTE_IN_SECONDS );
 		}
+	}
+
+	private function integrations(): array {
+		return [
+			'acf' => [
+				'active'  => function_exists( 'acf_get_setting' ),
+				'version' => defined( 'ACF_VERSION' ) ? (string) ACF_VERSION : '',
+				'ai'      => function_exists( 'acf_get_setting' ) ? (bool) acf_get_setting( 'enable_acf_ai' ) : false,
+			],
+			'elementor' => [
+				'active'  => class_exists( '\\Elementor\\Plugin' ),
+				'version' => defined( 'ELEMENTOR_VERSION' ) ? (string) ELEMENTOR_VERSION : '',
+			],
+			'woocommerce' => [
+				'active'  => class_exists( '\\WooCommerce' ) || defined( 'WC_VERSION' ),
+				'version' => defined( 'WC_VERSION' ) ? (string) WC_VERSION : '',
+				'direct_product_fields' => [
+					'global_unique_id' => method_exists( '\\WC_Product', 'set_global_unique_id' ),
+					'low_stock_amount' => method_exists( '\\WC_Product', 'set_low_stock_amount' ),
+					'brand_ids'        => method_exists( '\\WC_Product', 'set_brand_ids' ) && taxonomy_exists( 'product_brand' ),
+				],
+				'cogs_value_mode' => method_exists( '\\WC_Product', 'set_cogs_value' ) ? 'feature-gated-upstream' : 'unavailable',
+			],
+			'yoast_seo' => [
+				'active'  => class_exists( '\\WPSEO_Meta' ) || defined( 'WPSEO_VERSION' ),
+				'version' => defined( 'WPSEO_VERSION' ) ? (string) WPSEO_VERSION : '',
+			],
+		];
 	}
 }

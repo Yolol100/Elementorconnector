@@ -3,6 +3,7 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -18,7 +19,7 @@ final class ProductVariation {
 		$this->validate_request( $request );
 		$action     = (string) $request['action'];
 		$product_id = (int) $request['product_id'];
-		$parent     = $this->parent( $product_id );
+		$this->parent( $product_id );
 
 		if ( ! current_user_can( 'edit_post', $product_id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this variable product.' );
@@ -28,12 +29,21 @@ final class ProductVariation {
 			$variation = new \WC_Product_Variation();
 			$variation->set_parent_id( $product_id );
 			$variation->set_status( 'publish' );
-			$this->apply_data( $variation, (array) ( $request['data'] ?? [] ) );
-			$id = (int) $variation->save();
-			if ( $id < 1 ) {
-				throw new RuntimeException( 'WooCommerce did not return a variation ID.' );
+			try {
+				$this->apply_data( $variation, (array) ( $request['data'] ?? [] ) );
+				$id = (int) $variation->save();
+				if ( $id < 1 ) {
+					throw new RuntimeException( 'WooCommerce did not return a variation ID.' );
+				}
+				$data = $this->payload( $variation );
+				$this->assert_requested_state( $data, (array) ( $request['data'] ?? [] ) );
+			} catch ( \Throwable $throwable ) {
+				if ( $variation->get_id() > 0 ) {
+					$variation->delete( true );
+				}
+				throw $throwable;
 			}
-			return [ 'status' => 'created', 'product_id' => $product_id, 'variation_id' => $id, 'data' => $this->payload( $variation ) ];
+			return [ 'status' => 'created', 'product_id' => $product_id, 'variation_id' => $id, 'data' => $data ];
 		}
 
 		$variation_id = (int) ( $request['variation_id'] ?? 0 );
@@ -50,12 +60,31 @@ final class ProductVariation {
 				throw new RuntimeException( 'Deleting a WooCommerce variation requires confirm_destructive=true.' );
 			}
 			$variation->delete( true );
+			if ( null !== get_post( $variation_id ) ) {
+				throw new RuntimeException( 'WooCommerce variation deletion failed readback verification.' );
+			}
 			return [ 'status' => 'deleted', 'product_id' => $product_id, 'variation_id' => $variation_id ];
 		}
 
-		$this->apply_data( $variation, (array) ( $request['data'] ?? [] ) );
-		$variation->save();
-		return [ 'status' => 'updated', 'product_id' => $product_id, 'variation_id' => $variation_id, 'data' => $this->payload( $variation ) ];
+		$before = $this->payload( $variation );
+		try {
+			$this->apply_data( $variation, (array) ( $request['data'] ?? [] ) );
+			$variation->save();
+			$data = $this->payload( $variation );
+			$this->assert_requested_state( $data, (array) ( $request['data'] ?? [] ) );
+		} catch ( \Throwable $apply_error ) {
+			try {
+				$this->apply_data( $variation, $before );
+				$variation->save();
+				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $variation ) ) ) ) {
+					throw new RuntimeException( 'WooCommerce variation rollback failed exact readback verification.' );
+				}
+			} catch ( \Throwable $rollback_error ) {
+				throw new RuntimeException( 'WooCommerce variation update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
+			}
+			throw new RuntimeException( 'WooCommerce variation update failed. The previous variation state was restored.', 0, $apply_error );
+		}
+		return [ 'status' => 'updated', 'product_id' => $product_id, 'variation_id' => $variation_id, 'data' => $data ];
 	}
 
 	private function validate_request( array $request ): void {
@@ -89,7 +118,7 @@ final class ProductVariation {
 	}
 
 	private function apply_data( \WC_Product_Variation $variation, array $data ): void {
-		$allowed = array_merge( [ 'attributes', 'stock_quantity' ], self::BOOLEAN_FIELDS, self::STRING_FIELDS, self::INTEGER_FIELDS );
+		$allowed = array_merge( [ 'attributes', 'stock_quantity', 'global_unique_id', 'low_stock_amount' ], self::BOOLEAN_FIELDS, self::STRING_FIELDS, self::INTEGER_FIELDS );
 		if ( array_diff( array_keys( $data ), $allowed ) ) {
 			throw new RuntimeException( 'The variation request contains unsupported product fields.' );
 		}
@@ -138,6 +167,19 @@ final class ProductVariation {
 			}
 			$variation->set_stock_quantity( $data['stock_quantity'] );
 		}
+		if ( array_key_exists( 'global_unique_id', $data ) ) {
+			if ( ! is_string( $data['global_unique_id'] ) || ! method_exists( $variation, 'set_global_unique_id' ) ) {
+				throw new RuntimeException( 'This WooCommerce version does not support global variation identifiers.' );
+			}
+			$variation->set_global_unique_id( $data['global_unique_id'] );
+		}
+		if ( array_key_exists( 'low_stock_amount', $data ) ) {
+			$value = $data['low_stock_amount'];
+			if ( ( '' !== $value && ( ! is_int( $value ) || $value < 0 ) ) || ! method_exists( $variation, 'set_low_stock_amount' ) ) {
+				throw new RuntimeException( 'The WooCommerce variation low stock amount is invalid or unsupported.' );
+			}
+			$variation->set_low_stock_amount( $value );
+		}
 		if ( array_key_exists( 'attributes', $data ) ) {
 			if ( ! is_array( $data['attributes'] ) || ( [] !== $data['attributes'] && array_is_list( $data['attributes'] ) ) ) {
 				throw new RuntimeException( 'Variation attributes must be an object.' );
@@ -153,10 +195,34 @@ final class ProductVariation {
 		}
 	}
 
+	private function assert_requested_state( array $readback, array $requested ): void {
+		foreach ( $requested as $field => $expected ) {
+			if ( ! array_key_exists( $field, $readback ) ) {
+				throw new RuntimeException( 'WooCommerce variation readback omitted a requested field.' );
+			}
+			$actual = $readback[ $field ];
+			if ( 'stock_quantity' === $field && null !== $expected && null !== $actual ) {
+				if ( (float) $actual !== (float) $expected ) {
+					throw new RuntimeException( 'WooCommerce variation stock quantity failed readback verification.' );
+				}
+				continue;
+			}
+			if ( is_array( $expected ) ) {
+				if ( ! hash_equals( CanonicalJson::hash( $expected ), CanonicalJson::hash( $actual ) ) ) {
+					throw new RuntimeException( 'WooCommerce variation structured data failed readback verification.' );
+				}
+				continue;
+			}
+			if ( $actual !== $expected ) {
+				throw new RuntimeException( 'WooCommerce variation data failed readback verification.' );
+			}
+		}
+	}
+
 	private function payload( \WC_Product_Variation $variation ): array {
 		$from = $variation->get_date_on_sale_from( 'edit' );
 		$to   = $variation->get_date_on_sale_to( 'edit' );
-		return [
+		$data = [
 			'enabled'           => 'publish' === $variation->get_status( 'edit' ),
 			'sku'               => (string) $variation->get_sku( 'edit' ),
 			'regular_price'     => (string) $variation->get_regular_price( 'edit' ),
@@ -182,5 +248,13 @@ final class ProductVariation {
 			'description'       => (string) $variation->get_description( 'edit' ),
 			'attributes'        => array_map( 'strval', $variation->get_attributes( 'edit' ) ),
 		];
+		if ( method_exists( $variation, 'get_global_unique_id' ) ) {
+			$data['global_unique_id'] = (string) $variation->get_global_unique_id( 'edit' );
+		}
+		if ( method_exists( $variation, 'get_low_stock_amount' ) ) {
+			$amount = $variation->get_low_stock_amount( 'edit' );
+			$data['low_stock_amount'] = '' === $amount ? '' : (int) $amount;
+		}
+		return $data;
 	}
 }

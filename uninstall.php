@@ -11,6 +11,7 @@ delete_option( 'ejb_github_auth' );
 delete_option( 'ejb_poll_page' );
 delete_option( 'ejb_github_rate_limit_until' );
 delete_option( 'ejb_processed_content_requests' );
+delete_option( 'ejb_content_requests_lock' );
 delete_metadata( 'user', 0, '_ejb_device_flow', '', true );
 
 $ejb_role = get_role( 'administrator' );

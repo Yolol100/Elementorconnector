@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Elementor JSON Bridge
- * Description: Safely synchronizes editable WordPress content with GitHub, including normal content, Elementor data, ACF values and Yoast fields, with conflict detection, snapshots, validation and rollback.
- * Version: 0.5.0
+ * Description: Safely synchronizes WordPress and Elementor content with a private GitHub repository, including ACF, Yoast SEO and WooCommerce catalog operations, with validation, conflict detection, readback and rollback.
+ * Version: 0.6.0
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * Update URI: false
@@ -16,7 +16,7 @@ namespace Webactueel\ElementorJsonBridge;
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'EJB_VERSION', '0.5.0' );
+define( 'EJB_VERSION', '0.6.0' );
 define( 'EJB_FILE', __FILE__ );
 define( 'EJB_DIR', __DIR__ );
 

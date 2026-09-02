@@ -46,6 +46,7 @@ jobs:
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
           php tests/wordpress-content-sync.php
+          php tests/content-request-safety.php
           php tests/local-export.php
           php tests/site-parts.php
           php tests/local-export-controller.php
@@ -89,7 +90,7 @@ jobs:
   runtime:
     name: Runtime ${{ matrix.label }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +115,13 @@ jobs:
           wp-env --config="${{ matrix.config }}" run cli wp plugin is-active elementor
           wp-env --config="${{ matrix.config }}" run cli wp plugin is-active advanced-custom-fields
 
+      - name: Confirm current integration runtime
+        if: matrix.label == 'WordPress 7.1 / PHP 8.3'
+        run: |
+          wp-env --config="${{ matrix.config }}" run cli wp plugin is-active wordpress-seo
+          wp-env --config="${{ matrix.config }}" run cli wp plugin is-active woocommerce
+          wp-env --config="${{ matrix.config }}" run cli wp eval 'if (!defined("ELEMENTOR_VERSION") || ELEMENTOR_VERSION !== "4.2.4") { throw new RuntimeException("Unexpected Elementor runtime version."); } if (!defined("ACF_VERSION") || ACF_VERSION !== "6.8.9") { throw new RuntimeException("Unexpected ACF runtime version."); } if (!defined("WPSEO_VERSION") || WPSEO_VERSION !== "28.4") { throw new RuntimeException("Unexpected Yoast runtime version."); } if (!defined("WC_VERSION") || WC_VERSION !== "11.0.1") { throw new RuntimeException("Unexpected WooCommerce runtime version."); }'
+
       - name: Elementor target capability inventory
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-capabilities.php
 
@@ -122,6 +130,10 @@ jobs:
 
       - name: Generic WordPress content, ACF and Yoast roundtrip
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/wordpress-content.php
+
+      - name: Full request, WooCommerce and Abilities scenarios
+        if: matrix.label == 'WordPress 7.1 / PHP 8.3'
+        run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/content-operations.php
 
       - name: Elementor document save and readback
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-documents-roundtrip.php
