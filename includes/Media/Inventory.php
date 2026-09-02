@@ -9,28 +9,37 @@ defined( 'ABSPATH' ) || exit;
 
 final class Inventory {
 	public const SCHEMA_VERSION = '1.0';
+	private const BATCH_SIZE    = 200;
 
 	public static function collect(): array {
-		$ids = get_posts(
-			[
-				'post_type'      => 'attachment',
-				'post_status'    => 'inherit',
-				'post_mime_type' => 'image',
-				'posts_per_page' => -1,
-				'orderby'        => 'ID',
-				'order'          => 'ASC',
-				'fields'         => 'ids',
-				'no_found_rows'  => true,
-			]
-		);
-
 		$items = [];
-		foreach ( $ids as $id ) {
-			$item = self::item( (int) $id );
-			if ( null !== $item ) {
-				$items[] = $item;
+		$page  = 1;
+
+		do {
+			$query = new \WP_Query(
+				[
+					'post_type'              => 'attachment',
+					'post_status'            => 'inherit',
+					'post_mime_type'         => 'image',
+					'posts_per_page'         => self::BATCH_SIZE,
+					'paged'                  => $page,
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'fields'                 => 'ids',
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
+				]
+			);
+			$ids = is_array( $query->posts ) ? $query->posts : [];
+			foreach ( $ids as $id ) {
+				$item = self::item( (int) $id );
+				if ( null !== $item ) {
+					$items[] = $item;
+				}
 			}
-		}
+			++$page;
+		} while ( count( $ids ) === self::BATCH_SIZE );
 
 		$inventory_hash = CanonicalJson::hash( $items );
 		return [
@@ -93,7 +102,7 @@ final class Inventory {
 	}
 
 	public static function assert_id_url( int $attachment_id, string $url ): array {
-		$item = self::assert_attachment_id( $attachment_id );
+		$item      = self::assert_attachment_id( $attachment_id );
 		$candidate = esc_url_raw( $url );
 		$allowed   = [ (string) $item['url'] ];
 		foreach ( $item['sizes'] as $size ) {
