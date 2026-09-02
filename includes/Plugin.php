@@ -21,6 +21,7 @@ use Webactueel\ElementorJsonBridge\GitHub\DeviceAuth;
 use Webactueel\ElementorJsonBridge\Security\SecretBox;
 use Webactueel\ElementorJsonBridge\Sync\AutoApply;
 use Webactueel\ElementorJsonBridge\Sync\ContentRequests;
+use Webactueel\ElementorJsonBridge\Sync\ElementorCapabilities;
 use Webactueel\ElementorJsonBridge\Sync\Lock;
 use Webactueel\ElementorJsonBridge\Sync\Manager;
 
@@ -43,6 +44,7 @@ final class Plugin {
 		$snapshots         = new Snapshots();
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
+		$capability_sync   = new ElementorCapabilities( $github );
 		$local_export      = new LocalExport( $documents, new SiteParts( $documents ) );
 		$template_importer = new TemplateImporter( $documents, $validator, $snapshots, $lock );
 
@@ -54,6 +56,7 @@ final class Plugin {
 		( new TemplateImportUi() )->register();
 		( new TemplateImportController( $template_importer ) )->register();
 		( new Scheduler( $sync ) )->register();
+		$capability_sync->register();
 		( new ContentRequests( $content, $github, $sync ) )->register();
 		( new AutoApply( $sync, $content ) )->register();
 		add_action( 'save_post', [ $sync, 'on_wordpress_save' ], 100, 3 );
