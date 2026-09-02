@@ -4,9 +4,9 @@ namespace Webactueel\ElementorJsonBridge\Sync;
 
 use Throwable;
 use Webactueel\ElementorJsonBridge\Elementor\Capabilities;
+use Webactueel\ElementorJsonBridge\Elementor\CapabilityPackage;
 use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\Settings;
-use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -34,27 +34,46 @@ final class ElementorCapabilities {
 			return;
 		}
 
-		set_transient( self::CHECK_TRANSIENT, '1', HOUR_IN_SECONDS );
-
 		try {
 			$this->github->assert_private_repository();
 			$root = (string) Settings::get( 'repo_root', 'site-data' );
-			$path = trim( $root . '/elementor-capabilities.json', '/' );
-			$encoded = CanonicalJson::encode( Capabilities::collect(), true );
-			$remote = $this->github->get_file( $path );
+			$package = CapabilityPackage::build( Capabilities::collect(), $root );
+			$manifest_path = (string) $package['manifest_path'];
+			$manifest_content = (string) $package['manifest_content'];
+			$remote_manifest = $this->github->get_file( $manifest_path );
 
-			if ( $remote && hash_equals( hash( 'sha256', $encoded ), hash( 'sha256', (string) $remote['content'] ) ) ) {
+			if ( self::same_content( $remote_manifest, $manifest_content ) ) {
+				set_transient( self::CHECK_TRANSIENT, '1', HOUR_IN_SECONDS );
 				return;
 			}
 
+			foreach ( $package['shards'] as $path => $content ) {
+				$remote = $this->github->get_file( (string) $path );
+				if ( self::same_content( $remote, (string) $content ) ) {
+					continue;
+				}
+				$this->github->put_file(
+					(string) $path,
+					(string) $content,
+					$remote ? (string) $remote['sha'] : null,
+					'Refresh Elementor capability shard'
+				);
+			}
+
 			$this->github->put_file(
-				$path,
-				$encoded,
-				$remote ? (string) $remote['sha'] : null,
-				'Refresh Elementor capability inventory'
+				$manifest_path,
+				$manifest_content,
+				$remote_manifest ? (string) $remote_manifest['sha'] : null,
+				'Refresh Elementor capability manifest'
 			);
+			set_transient( self::CHECK_TRANSIENT, '1', HOUR_IN_SECONDS );
 		} catch ( Throwable ) {
-			return;
+			set_transient( self::CHECK_TRANSIENT, '1', 5 * MINUTE_IN_SECONDS );
 		}
+	}
+
+	private static function same_content( ?array $remote, string $content ): bool {
+		return null !== $remote
+			&& hash_equals( hash( 'sha256', $content ), hash( 'sha256', (string) $remote['content'] ) );
 	}
 }
