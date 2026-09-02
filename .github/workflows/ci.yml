@@ -40,6 +40,7 @@ jobs:
           node --check assets/js/local-export.js
           node --check assets/js/template-import.js
           php tests/run.php
+          php tests/elementor-capabilities.php
           php tests/background-authorization.php
           php tests/sync-roundtrip.php
           php tests/wordpress-content-sync.php
@@ -110,6 +111,9 @@ jobs:
           wp-env --config="${{ matrix.config }}" run cli wp core version
           wp-env --config="${{ matrix.config }}" run cli wp plugin is-active elementor
           wp-env --config="${{ matrix.config }}" run cli wp plugin is-active advanced-custom-fields
+
+      - name: Elementor target capability inventory
+        run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/elementor-capabilities.php
 
       - name: Generic WordPress content, ACF and Yoast roundtrip
         run: wp-env --config="${{ matrix.config }}" run cli wp eval-file wp-content/ejb-runtime-tests/wordpress-content.php
