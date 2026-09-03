@@ -24,7 +24,7 @@ final class Snapshots {
 		);
 	}
 
-	public function create( int $source_id, array $payload, string $reason, string $remote_sha = '' ): int {
+	public function create( int $source_id, array $payload, string $reason, string $remote_sha = '', array $extra_state = [] ): int {
 		$json = CanonicalJson::encode( $payload, true );
 		$id   = wp_insert_post(
 			[
@@ -44,16 +44,17 @@ final class Snapshots {
 		update_post_meta( $id, '_ejb_snapshot_reason', sanitize_key( $reason ) );
 		update_post_meta( $id, '_ejb_snapshot_remote_sha', sanitize_text_field( $remote_sha ) );
 		update_post_meta( $id, '_ejb_snapshot_user', get_current_user_id() );
+		if ( $extra_state ) {
+			update_post_meta( $id, '_ejb_snapshot_extra_state', wp_slash( CanonicalJson::encode( $extra_state, true ) ) );
+			update_post_meta( $id, '_ejb_snapshot_extra_hash', CanonicalJson::hash( $extra_state ) );
+		}
 		$this->prune( $source_id );
 
 		return (int) $id;
 	}
 
 	public function payload( int $snapshot_id, int $source_id ): array {
-		$post = get_post( $snapshot_id );
-		if ( ! $post || self::POST_TYPE !== $post->post_type || $source_id !== (int) $post->post_parent ) {
-			throw new RuntimeException( 'The rollback snapshot does not belong to this document.' );
-		}
+		$post = $this->snapshot_post( $snapshot_id, $source_id );
 		$data = json_decode( (string) $post->post_content, true );
 		if ( ! is_array( $data ) ) {
 			throw new RuntimeException( 'The rollback snapshot is damaged.' );
@@ -71,6 +72,30 @@ final class Snapshots {
 		return $data;
 	}
 
+	public function extra_state( int $snapshot_id, int $source_id ): array {
+		$this->snapshot_post( $snapshot_id, $source_id );
+		$json = get_post_meta( $snapshot_id, '_ejb_snapshot_extra_state', true );
+		if ( '' === $json ) {
+			return [];
+		}
+		if ( ! is_string( $json ) ) {
+			throw new RuntimeException( 'The rollback snapshot extra state is damaged.' );
+		}
+		$data = json_decode( $json, true );
+		if ( ! is_array( $data ) || array_is_list( $data ) ) {
+			throw new RuntimeException( 'The rollback snapshot extra state is damaged.' );
+		}
+		$stored_hash = get_post_meta( $snapshot_id, '_ejb_snapshot_extra_hash', true );
+		if (
+			! is_string( $stored_hash )
+			|| 1 !== preg_match( '/^[a-f0-9]{64}$/D', $stored_hash )
+			|| ! hash_equals( $stored_hash, CanonicalJson::hash( $data ) )
+		) {
+			throw new RuntimeException( 'The rollback snapshot extra state failed integrity verification.' );
+		}
+		return $data;
+	}
+
 	public function latest_id( int $source_id ): int {
 		$ids = get_posts(
 			[
@@ -85,6 +110,14 @@ final class Snapshots {
 			]
 		);
 		return $ids ? (int) $ids[0] : 0;
+	}
+
+	private function snapshot_post( int $snapshot_id, int $source_id ): \WP_Post {
+		$post = get_post( $snapshot_id );
+		if ( ! $post instanceof \WP_Post || self::POST_TYPE !== $post->post_type || $source_id !== (int) $post->post_parent ) {
+			throw new RuntimeException( 'The rollback snapshot does not belong to this document.' );
+		}
+		return $post;
 	}
 
 	private function prune( int $source_id ): void {
