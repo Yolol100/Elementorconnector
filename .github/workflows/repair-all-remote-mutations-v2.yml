@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply v2 safety contracts
-        run: python3 .github/repair_all_remote_mutations_v2.py
+        run: python3 .github/repair_all_remote_mutations_v2_driver.py
 
       - name: Align static regression sources
         run: |
@@ -68,6 +68,7 @@ jobs:
       - name: Remove one-time repair tooling
         run: |
           rm .github/repair_all_remote_mutations_v2.py
+          rm .github/repair_all_remote_mutations_v2_driver.py
           rm .github/workflows/repair-all-remote-mutations-v2.yml
 
       - name: Commit repaired sources
