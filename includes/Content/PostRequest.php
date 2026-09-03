@@ -190,11 +190,12 @@ final class PostRequest {
 		if ( ! $post instanceof \WP_Post ) {
 			throw new RuntimeException( 'The WordPress content item no longer exists.' );
 		}
-		$state = [
+		$post_format = get_post_format( $id );
+		$state       = [
 			'author'   => (int) $post->post_author,
 			'date'     => (string) $post->post_date,
 			'password' => (string) $post->post_password,
-			'format'   => (string) ( get_post_format( $id ) ?: '' ),
+			'format'   => (string) ( false === $post_format ? '' : $post_format ),
 		];
 		if ( 'post' === $post->post_type ) {
 			$state['sticky'] = is_sticky( $id );
