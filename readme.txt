@@ -100,6 +100,7 @@ Authentication, processed request IDs and request-process lock state are always 
 * Add live WordPress Abilities discovery for safe Core, ACF, Yoast SEO and WooCommerce product capabilities.
 * Add ACF AI capability context and current integration version context to `abilities.json`.
 * Route WooCommerce product core/catalog writes through WooCommerce CRUD and align delete behavior with WooCommerce Trash/force semantics.
+* Keep WooCommerce `brand_ids` and the canonical `product_brand` taxonomy envelope on one desired state so supported write paths cannot undo each other.
 * Add current stable WooCommerce global identifier, low-stock and product-brand fields; keep feature-gated COGS fail-closed.
 * Add prevalidation, exact readback and verified rollback to direct update operations.
 * Make GitHub request dispatch honor automatic-apply opt-in and use atomic stale-lock takeover.
