@@ -32,7 +32,7 @@ The default root is `site-data` and can contain:
 
 `bridge.json` is the machine-readable contract. Existing common WordPress/ACF/Yoast/Elementor content is edited at the exact canonical path listed in `site-index.json`.
 
-WooCommerce catalog fields use `manage-product` and `manage-product-variation` request files so product writes use WooCommerce CRUD and verified readback.
+WooCommerce catalog fields use `manage-product` and `manage-product-variation` request files so product writes use WooCommerce CRUD and verified readback. Product `brand_ids` are aligned with the canonical `product_brand` taxonomy envelope so the WooCommerce product model and WordPress taxonomy API cannot overwrite each other with different desired states.
 
 `abilities.json` records the registered external ability surface plus WordPress/ACF/Elementor/WooCommerce/Yoast version context. An ability appearing in source code is not treated as available unless the live target actually registers it.
 

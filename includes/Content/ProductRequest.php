@@ -65,6 +65,7 @@ final class ProductRequest {
 		$current_woo     = $this->woo_payload( $id );
 		$desired_content = $this->desired_content( $id, $current_content, $core, $request, true );
 		$desired_woo     = $this->desired_woo( $id, $current_woo, $woo );
+		$desired_content = $this->align_product_brand_taxonomy( $id, $desired_content, $desired_woo );
 
 		$this->validate_core_extras( $core, true );
 		$this->apply_core( $id, $core, true );
@@ -79,6 +80,7 @@ final class ProductRequest {
 		$before_password = (string) get_post_field( 'post_password', $id, 'raw' );
 		$desired_content = $this->desired_content( $id, $before_content, $core, $request, false );
 		$desired_woo     = $this->desired_woo( $id, $before_woo, $woo );
+		$desired_content = $this->align_product_brand_taxonomy( $id, $desired_content, $desired_woo );
 
 		$this->validate_core_extras( $core, false );
 		try {
@@ -145,6 +147,23 @@ final class ProductRequest {
 		$base                     = $this->products->validate( $base, $id );
 		$extras                   = $this->product_extras->validate( $extras, $id );
 		return array_merge( $base, $extras );
+	}
+
+	private function align_product_brand_taxonomy( int $id, array $content, array $woo ): array {
+		if ( ! array_key_exists( 'brand_ids', $woo ) || ! isset( $content['taxonomies']['product_brand'] ) ) {
+			return $content;
+		}
+		$slugs = [];
+		foreach ( $woo['brand_ids'] as $brand_id ) {
+			$term = get_term( (int) $brand_id, 'product_brand' );
+			if ( ! $term instanceof \WP_Term ) {
+				throw new RuntimeException( 'A WooCommerce brand disappeared before the product update could be applied.' );
+			}
+			$slugs[] = (string) $term->slug;
+		}
+		sort( $slugs, SORT_STRING );
+		$content['taxonomies']['product_brand'] = $slugs;
+		return $this->content->validate_array( $content, $id );
 	}
 
 	private function apply_woo( int $id, array $woo ): void {

@@ -60,7 +60,7 @@ site-data/
 
 `bridge.json` is the machine-readable protocol contract. `site-index.json` maps managed WordPress items to canonical content files. `abilities.json` records the abilities and integration versions actually available on the target. `elementor-capabilities.json` records the Elementor/Core/Pro/add-on surface actually registered on the site.
 
-WooCommerce catalog fields are intentionally request-driven: use `manage-product` / `manage-product-variation` so writes go through WooCommerce CRUD and exact readback instead of generic post-meta mutation.
+WooCommerce catalog fields are intentionally request-driven: use `manage-product` / `manage-product-variation` so writes go through WooCommerce CRUD and exact readback instead of generic post-meta mutation. When WooCommerce `brand_ids` are changed, the bridge aligns the canonical `product_brand` taxonomy envelope to the same desired brands so the two supported APIs cannot undo each other.
 
 ## Supported request formats
 
