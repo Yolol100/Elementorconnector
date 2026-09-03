@@ -52,7 +52,7 @@ Product deletion follows WooCommerce semantics: confirmed deletion moves to Tras
 
 `elementor-json-bridge/manage-term` version 2 supports create/read/update/delete for WordPress/WooCommerce taxonomies with exact term IDs outside create. Update/delete require the `base_hash` from a fresh read result and create a durable typed snapshot before validation. Pending version-1 requests must be regenerated. ACF and Yoast term data can be included where the installed plugin APIs support it.
 
-`elementor-json-bridge/run-ability` version 2 executes only a constrained live-catalog ability explicitly annotated read-only. Mutable abilities remain discoverable context but cannot execute through this generic GitHub route; mutations use guarded versioned CRUD requests instead. Pending version-1 ability requests must be regenerated. Core abilities are executable through this GitHub route only when read-only. Destructive abilities require explicit confirmation. ACF abilities require ACF AI support to be enabled on the target.
+`elementor-json-bridge/run-ability` version 2 executes only a constrained live-catalog ability explicitly annotated read-only. Mutable abilities remain discoverable context but cannot execute through this generic GitHub route; mutations use guarded versioned CRUD requests instead. Pending version-1 ability requests must be regenerated. ACF abilities require ACF AI support to be enabled on the target.
 
 == Safety ==
 
@@ -63,13 +63,14 @@ Product deletion follows WooCommerce semantics: confirmed deletion moves to Tras
 * `request_id` values are fingerprinted; an ID cannot be reused for changed input.
 * A process lock prevents two request polls from executing the same unrecorded operation concurrently, and stale-lock takeover uses an atomic compare-and-swap.
 * Automatic GitHub request dispatch honors the explicit `auto_apply` opt-in.
-* `manage-post` version 2 update/delete follows fresh canonical state -> `base_hash` conflict check -> durable snapshot -> validation -> save -> exact readback; stale or legacy requests fail closed.
-* Existing canonical content uses fresh conflict checks, integrity-checked snapshots, supported APIs, exact fingerprint readback and verified rollback.
+* Canonical content and `manage-post` version 2 update/delete use fresh-state conflict checks, integrity-checked pre-mutation snapshots, validation, supported APIs, exact readback and verified rollback.
+* Product, taxonomy-term and variation version-2 updates/deletes require a fresh read-derived `base_hash`, create a durable typed pre-state snapshot before validation, then use supported APIs with exact readback and verified rollback.
+* The generic version-2 Ability route executes read-only abilities only; mutable abilities cannot bypass the guarded CRUD safety sequence.
 * ACF fields remain bound to their live field name/key/type identity, including guarded first writes for fields registered on the target screen.
 * Calculated Yoast analysis/indexable data is not bulk written as editable SEO metadata.
 * Elementor storage is never directly mutated.
-* WooCommerce catalog data is written through WooCommerce CRUD.
-* Product, term, variation and ability deletion/destructive actions require explicit confirmation.
+* WooCommerce catalog data is written through WooCommerce CRUD, with product brands aligned to the canonical `product_brand` taxonomy envelope.
+* Destructive product, taxonomy-term and variation operations require explicit confirmation; the generic Ability route performs no destructive writes.
 
 == Current runtime matrix ==
 
