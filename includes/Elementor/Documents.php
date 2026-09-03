@@ -58,7 +58,7 @@ final class Documents {
 			throw new RuntimeException( 'Elementor did not return a document.' );
 		}
 		$post_id = (int) $document->get_main_id();
-		if ( $post_id < 1 || $post_type !== get_post_type( $post_id ) ) {
+		if ( 1 > $post_id || $post_type !== get_post_type( $post_id ) ) {
 			if ( $post_id > 0 ) {
 				wp_delete_post( $post_id, true );
 			}

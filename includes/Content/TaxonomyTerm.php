@@ -252,7 +252,7 @@ final class TaxonomyTerm {
 		if ( ! function_exists( 'get_field_objects' ) ) {
 			return [];
 		}
-		$objects = get_field_objects( 'term_' . $term_id, false, true, false );
+		$objects = get_field_objects( $this->acf_object_id( $term_id ), false, true, false );
 		if ( ! is_array( $objects ) ) {
 			return [];
 		}
@@ -290,8 +290,16 @@ final class TaxonomyTerm {
 	private function apply_acf( int $term_id, mixed $acf ): void {
 		$this->validate_acf( $term_id, $acf );
 		foreach ( $acf as $field ) {
-			update_field( (string) $field['key'], $field['value'], 'term_' . $term_id );
+			update_field( (string) $field['key'], $field['value'], $this->acf_object_id( $term_id ) );
 		}
+	}
+
+	private function acf_object_id( int $term_id ): string {
+		$term = get_term( $term_id );
+		if ( ! $term instanceof \WP_Term ) {
+			throw new RuntimeException( 'The taxonomy term no longer exists for ACF.' );
+		}
+		return $term->taxonomy . '_' . $term_id;
 	}
 
 	private function yoast( \WP_Term $term, string $taxonomy ): array {
