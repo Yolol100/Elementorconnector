@@ -4,14 +4,30 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/');
 
+if (!class_exists('WP_Post')) {
+    class WP_Post {
+        public int $ID;
+        public string $post_type;
+        public int $post_parent;
+        public string $post_content;
+
+        public function __construct(int $id, string $postType, int $parent, string $content) {
+            $this->ID = $id;
+            $this->post_type = $postType;
+            $this->post_parent = $parent;
+            $this->post_content = $content;
+        }
+    }
+}
+
 $GLOBALS['ejb_snapshot_post'] = null;
 $GLOBALS['ejb_snapshot_hash'] = '';
 $GLOBALS['ejb_snapshot_extra_state'] = '';
 $GLOBALS['ejb_snapshot_extra_hash'] = '';
 
 if (!function_exists('get_post')) {
-    function get_post(int $post_id): object|false {
-        return $post_id === 77 ? $GLOBALS['ejb_snapshot_post'] : false;
+    function get_post(int $post_id): WP_Post|false {
+        return $post_id === 77 && $GLOBALS['ejb_snapshot_post'] instanceof WP_Post ? $GLOBALS['ejb_snapshot_post'] : false;
     }
 }
 if (!function_exists('get_post_meta')) {
@@ -58,12 +74,12 @@ $extra = [
     'format' => '',
 ];
 
-$GLOBALS['ejb_snapshot_post'] = (object) [
-    'ID' => 77,
-    'post_type' => Snapshots::POST_TYPE,
-    'post_parent' => 123,
-    'post_content' => CanonicalJson::encode($payload, true),
-];
+$GLOBALS['ejb_snapshot_post'] = new WP_Post(
+    77,
+    Snapshots::POST_TYPE,
+    123,
+    CanonicalJson::encode($payload, true)
+);
 $GLOBALS['ejb_snapshot_hash'] = CanonicalJson::hash($payload);
 $GLOBALS['ejb_snapshot_extra_state'] = CanonicalJson::encode($extra, true);
 $GLOBALS['ejb_snapshot_extra_hash'] = CanonicalJson::hash($extra);
