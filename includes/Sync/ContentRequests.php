@@ -41,6 +41,9 @@ final class ContentRequests {
 	}
 
 	public function process(): void {
+		if ( 1 !== (int) Settings::get( 'auto_apply', 0 ) ) {
+			return;
+		}
 		if ( ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
 			return;
 		}
@@ -88,7 +91,7 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 4,
+			'version'               => 5,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
 			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
@@ -109,6 +112,7 @@ final class ContentRequests {
 				'Use manage-product requests for WooCommerce catalog fields so product writes use WooCommerce CRUD and exact readback.',
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
+				'For manage-post update/delete requests, copy base_hash from the exact canonical content JSON you read. WordPress rejects stale hashes before any mutation.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
 				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
@@ -209,8 +213,17 @@ final class ContentRequests {
 		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
 		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
 		if ( is_array( $data ) && time() - (int) ( $data['created_at'] ?? time() ) > self::PROCESS_LOCK_TTL ) {
-			delete_option( self::PROCESS_LOCK_OPTION );
-			if ( add_option( self::PROCESS_LOCK_OPTION, $value, '', false ) ) {
+			global $wpdb;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Atomic compare-and-swap is required so a contender cannot delete a freshly acquired lock.
+			$updated = $wpdb->update(
+				$wpdb->options,
+				[ 'option_value' => $value ],
+				[ 'option_name' => self::PROCESS_LOCK_OPTION, 'option_value' => $existing ],
+				[ '%s' ],
+				[ '%s', '%s' ]
+			);
+			if ( 1 === $updated ) {
+				wp_cache_delete( self::PROCESS_LOCK_OPTION, 'options' );
 				return $token;
 			}
 		}

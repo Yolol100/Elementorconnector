@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Content;
 
 use DateTimeImmutable;
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
@@ -41,6 +42,8 @@ final class PostRequest {
 		if ( ! current_user_can( 'edit_post', $id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WordPress content item.' );
 		}
+		$current_content = $this->content->payload( $id );
+		$this->assert_base_hash( $current_content, $request );
 		if ( 'delete' === $action ) {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting WordPress content requires confirm_destructive=true.' );
@@ -48,17 +51,19 @@ final class PostRequest {
 			if ( ! current_user_can( 'delete_post', $id ) ) {
 				throw new RuntimeException( 'You are not allowed to delete this WordPress content item.' );
 			}
+			$snapshot_id = $this->snapshots()->create( $id, $current_content, 'before_request_delete' );
 			if ( ! wp_trash_post( $id ) || 'trash' !== get_post_status( $id ) ) {
 				throw new RuntimeException( 'WordPress content trash failed readback verification.' );
 			}
-			return [ 'status' => 'deleted', 'post_id' => $id ];
+			return [ 'status' => 'deleted', 'post_id' => $id, 'snapshot_id' => $snapshot_id ];
 		}
 
 		$post            = is_array( $request['post'] ?? null ) ? $request['post'] : [];
-		$before_content  = $this->content->payload( $id );
+		$before_content  = $current_content;
 		$before_extended = $this->extended_state( $id );
 		$desired         = $this->desired_content( $id, $before_content, $post, $request, false );
 		$this->validate_extended_post_fields( $id, $post );
+		$snapshot_id = $this->snapshots()->create( $id, $before_content, 'before_request_update' );
 
 		try {
 			$this->content->apply( $id, $desired );
@@ -74,7 +79,7 @@ final class PostRequest {
 			}
 			throw new RuntimeException( 'WordPress content update failed. The previous content state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'post_id' => $id ];
+		return [ 'status' => 'updated', 'post_id' => $id, 'snapshot_id' => $snapshot_id ];
 	}
 
 	private function create_wordpress_draft( array $request, array $request_post ): int {
@@ -190,11 +195,12 @@ final class PostRequest {
 		if ( ! $post instanceof \WP_Post ) {
 			throw new RuntimeException( 'The WordPress content item no longer exists.' );
 		}
-		$state = [
+		$format = get_post_format( $id );
+		$state  = [
 			'author'   => (int) $post->post_author,
 			'date'     => (string) $post->post_date,
 			'password' => (string) $post->post_password,
-			'format'   => (string) ( get_post_format( $id ) ?: '' ),
+			'format'   => false === $format ? '' : (string) $format,
 		];
 		if ( 'post' === $post->post_type ) {
 			$state['sticky'] = is_sticky( $id );
@@ -202,8 +208,22 @@ final class PostRequest {
 		return $state;
 	}
 
+	private function assert_base_hash( array $current, array $request ): void {
+		$base_hash = (string) ( $request['base_hash'] ?? '' );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/D', $base_hash ) ) {
+			throw new RuntimeException( 'Updating or deleting content requires a valid base_hash.' );
+		}
+		if ( ! hash_equals( $base_hash, CanonicalJson::hash( $current ) ) ) {
+			throw new RuntimeException( 'The WordPress content changed after this request was authored. Refresh the canonical content JSON and create a new request.' );
+		}
+	}
+
+	private function snapshots(): Snapshots {
+		return new Snapshots();
+	}
+
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'post_id', 'post_type', 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'post_id', 'post_type', 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'base_hash', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The post request contains unsupported fields.' );
 		}
@@ -219,6 +239,8 @@ final class PostRequest {
 			}
 		} elseif ( (int) ( $request['post_id'] ?? 0 ) < 1 ) {
 			throw new RuntimeException( 'Updating or deleting content requires an exact post_id.' );
+		} elseif ( ! is_string( $request['base_hash'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['base_hash'] ) ) {
+			throw new RuntimeException( 'Updating or deleting content requires a valid base_hash.' );
 		}
 		if ( isset( $request['post'] ) && ( ! is_array( $request['post'] ) || ( [] !== $request['post'] && array_is_list( $request['post'] ) ) ) ) {
 			throw new RuntimeException( 'The post request post field must be an object.' );

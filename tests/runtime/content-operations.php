@@ -7,9 +7,11 @@ use Webactueel\ElementorJsonBridge\Content\ProductVariation;
 use Webactueel\ElementorJsonBridge\Content\TaxonomyTerm;
 use Webactueel\ElementorJsonBridge\Content\WooCommerceProduct;
 use Webactueel\ElementorJsonBridge\Content\WooCommerceProductExtras;
+use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
+use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	throw new RuntimeException( 'WordPress was not bootstrapped.' );
@@ -52,6 +54,10 @@ $products   = new ProductRequest( $woo, $woo_extra, $content );
 $variations = new ProductVariation();
 $terms      = new TaxonomyTerm();
 $abilities  = new AbilityBridge();
+
+$post_base_hash = static function ( int $post_id ) use ( $content ): string {
+	return CanonicalJson::hash( $content->payload( $post_id ) );
+};
 
 $cleanup_posts = [];
 $cleanup_terms = [];
@@ -116,7 +122,7 @@ try {
 
 	$before_title = get_the_title( $page_id );
 	$expect_runtime_exception(
-		static function () use ( $posts, $page_id ): void {
+		static function () use ( $posts, $page_id, $post_base_hash ): void {
 			$posts->execute(
 				[
 					'format'     => PostRequest::FORMAT,
@@ -124,6 +130,7 @@ try {
 					'request_id' => 'runtime-post-invalid-author',
 					'action'     => 'update',
 					'post_id'    => $page_id,
+					'base_hash'  => $post_base_hash( $page_id ),
 					'post'       => [ 'title' => 'Must Not Persist', 'author' => 999999999 ],
 				]
 			);
@@ -134,13 +141,15 @@ try {
 		throw new RuntimeException( 'PostRequest changed content before rejecting invalid extended data.' );
 	}
 
-	$posts->execute(
+	$before_update_payload = $content->payload( $page_id );
+	$post_update_result   = $posts->execute(
 		[
 			'format'     => PostRequest::FORMAT,
 			'version'    => PostRequest::VERSION,
 			'request_id' => 'runtime-post-update',
 			'action'     => 'update',
 			'post_id'    => $page_id,
+			'base_hash'  => CanonicalJson::hash( $before_update_payload ),
 			'post'       => [
 				'title'    => 'EJB Request Page Updated',
 				'content'  => '<p>Request page after.</p>',
@@ -151,6 +160,32 @@ try {
 	$page = get_post( $page_id );
 	if ( ! $page instanceof WP_Post || 'EJB Request Page Updated' !== $page->post_title || 'runtime-pass' !== $page->post_password ) {
 		throw new RuntimeException( 'PostRequest update failed readback.' );
+	}
+	$snapshot_id = (int) ( $post_update_result['snapshot_id'] ?? 0 );
+	if ( $snapshot_id < 1 || ! hash_equals( CanonicalJson::hash( $before_update_payload ), CanonicalJson::hash( ( new Snapshots() )->payload( $snapshot_id, $page_id ) ) ) ) {
+		throw new RuntimeException( 'PostRequest did not persist a valid pre-update snapshot.' );
+	}
+
+	$stale_hash = $post_base_hash( $page_id );
+	wp_update_post( [ 'ID' => $page_id, 'post_title' => 'EJB Local Newer' ] );
+	$expect_runtime_exception(
+		static function () use ( $posts, $page_id, $stale_hash ): void {
+			$posts->execute(
+				[
+					'format'     => PostRequest::FORMAT,
+					'version'    => PostRequest::VERSION,
+					'request_id' => 'runtime-post-stale-base',
+					'action'     => 'update',
+					'post_id'    => $page_id,
+					'base_hash'  => $stale_hash,
+					'post'       => [ 'title' => 'Must Not Overwrite Newer Local Edit' ],
+				]
+			);
+		},
+		'PostRequest accepted a stale base hash.'
+	);
+	if ( 'EJB Local Newer' !== get_the_title( $page_id ) ) {
+		throw new RuntimeException( 'A stale PostRequest overwrote a newer local edit.' );
 	}
 
 	$elementor_result = $posts->execute(
@@ -177,7 +212,7 @@ try {
 	}
 
 	$expect_runtime_exception(
-		static function () use ( $posts, $page_id ): void {
+		static function () use ( $posts, $page_id, $post_base_hash ): void {
 			$posts->execute(
 				[
 					'format'     => PostRequest::FORMAT,
@@ -185,6 +220,7 @@ try {
 					'request_id' => 'runtime-post-delete-no-confirm',
 					'action'     => 'delete',
 					'post_id'    => $page_id,
+					'base_hash'  => $post_base_hash( $page_id ),
 				]
 			);
 		},
@@ -200,6 +236,7 @@ try {
 			'request_id'          => 'runtime-post-delete',
 			'action'              => 'delete',
 			'post_id'             => $page_id,
+			'base_hash'           => $post_base_hash( $page_id ),
 			'confirm_destructive' => true,
 		]
 	);

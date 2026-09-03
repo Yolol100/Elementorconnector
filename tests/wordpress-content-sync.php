@@ -62,6 +62,9 @@ $assert(str_contains($requests, 'MAX_REQUEST_BYTES'), 'GitHub operation requests
 $assert(str_contains($posts, "'elementor-json-bridge/manage-post'") && str_contains($posts, "confirm_destructive=true"), 'Page/post CRUD request support is incomplete.');
 $assert(str_contains($posts, 'create_elementor_draft(') && str_contains($posts, '$this->elementor->create_payload('), 'New Elementor content is not routed through the Elementor document manager.');
 $assert(str_contains($posts, 'rollback could not be verified') && str_contains($posts, 'CanonicalJson::hash'), 'Post request rollback/readback protection is incomplete.');
+$assert(str_contains($posts, "'base_hash'") && str_contains($posts, 'before_request_update') && str_contains($posts, 'before_request_delete'), 'Post request conflict/snapshot protection is incomplete.');
+$assert(str_contains($requests, "1 !== (int) Settings::get( 'auto_apply', 0 )") && str_contains($requests, '$wpdb->update('), 'Request dispatch opt-in or atomic lock protection is incomplete.');
+$assert(str_contains($content, 'acf_get_field_groups(') && str_contains($content, 'get_field_object(') && str_contains($terms, "[ 'taxonomy' => \$taxonomy ]"), 'ACF first-write validation is incomplete.');
 $assert(str_contains($elementorDocuments, 'create_payload(') && str_contains($elementorDocuments, '$manager->get_document_type(') && str_contains($elementorDocuments, '$manager->create('), 'Elementor document creation does not validate and use the official document manager.');
 
 $assert(str_contains($products, "'elementor-json-bridge/manage-product'") && str_contains($products, 'publish_products'), 'WooCommerce product CRUD or publish capability checks are missing.');

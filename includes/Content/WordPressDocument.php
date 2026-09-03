@@ -440,14 +440,34 @@ final class WordPressDocument {
 		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'update_field' ) ) {
 			throw new RuntimeException( 'ACF content is present but Advanced Custom Fields is not active.' );
 		}
-		$current = $this->acf( $post_id );
+		$current            = $this->acf( $post_id );
+		$allowed_group_keys = [];
+		if ( function_exists( 'acf_get_field_groups' ) ) {
+			$groups = acf_get_field_groups( [ 'post_id' => $post_id, 'post_type' => (string) get_post_type( $post_id ) ] );
+			foreach ( is_array( $groups ) ? $groups : [] as $group ) {
+				if ( is_array( $group ) && is_string( $group['key'] ?? null ) ) {
+					$allowed_group_keys[] = $group['key'];
+				}
+			}
+		}
 		foreach ( $acf as $name => $field ) {
 			$keys = is_array( $field ) ? array_keys( $field ) : [];
 			sort( $keys, SORT_STRING );
-			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys ) {
+			$identity = $current[ $name ] ?? null;
+			if ( null === $identity && function_exists( 'get_field_object' ) && is_array( $field ) ) {
+				$candidate = get_field_object( (string) ( $field['key'] ?? '' ), $post_id, false, false );
+				if (
+					is_array( $candidate )
+					&& (string) ( $candidate['name'] ?? '' ) === (string) $name
+					&& in_array( (string) ( $candidate['parent'] ?? '' ), $allowed_group_keys, true )
+				) {
+					$identity = [ 'key' => (string) $candidate['key'], 'type' => (string) ( $candidate['type'] ?? '' ), 'value' => null ];
+				}
+			}
+			if ( ! is_array( $identity ) || [ 'key', 'type', 'value' ] !== $keys ) {
 				throw new RuntimeException( 'The ACF field set no longer matches this WordPress item.' );
 			}
-			if ( $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
+			if ( $field['key'] !== $identity['key'] || $field['type'] !== $identity['type'] ) {
 				throw new RuntimeException( 'An ACF field identity changed after export.' );
 			}
 		}

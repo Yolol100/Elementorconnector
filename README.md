@@ -49,7 +49,7 @@ WooCommerce catalog fields are intentionally request-driven: use `manage-product
 
 `elementor-json-bridge/manage-post`, version `1`
 
-Actions: `create`, `update`, `delete`. New items are drafts. Delete requires `confirm_destructive=true`.
+Actions: `create`, `update`, `delete`. New items are drafts. Update/delete require `base_hash`, calculated from the exact canonical content JSON used to author the request; stale hashes fail closed. Delete additionally requires `confirm_destructive=true`.
 
 When a create request contains an `elementor` document payload, creation is routed through `Elementor\Plugin::$instance->documents->create()` and saved through the Elementor document API. A normal WordPress item is never silently converted into Elementor content.
 
@@ -98,7 +98,7 @@ Each ability remains subject to its own WordPress permission callback and input/
 3. Request payloads are bounded to 1 MB and use strict known-field validation.
 4. Request IDs are fingerprinted for idempotency; reusing an ID with changed input fails closed.
 5. Only one request-processing poll may execute at a time; stale process locks expire.
-6. Existing content uses fresh conflict checks, local integrity-checked snapshots, validation, supported APIs, full readback and verified rollback.
+6. Canonical content applies and `manage-post` update/delete requests use fresh conflict checks; `manage-post` also persists a local integrity-checked pre-mutation snapshot, followed by validation, supported APIs, readback and verified rollback.
 7. Direct request updates validate the desired state before mutation and verify/restore the previous state on failure.
 8. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
 9. WooCommerce product data is written through WooCommerce CRUD.
