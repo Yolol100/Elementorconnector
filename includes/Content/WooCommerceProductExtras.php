@@ -3,7 +3,6 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
-
 defined( 'ABSPATH' ) || exit;
 
 final class WooCommerceProductExtras {
@@ -21,7 +20,9 @@ final class WooCommerceProductExtras {
 			$data['low_stock_amount'] = '' === $amount ? '' : (int) $amount;
 		}
 		if ( method_exists( $product, 'get_brand_ids' ) ) {
-			$data['brand_ids'] = array_values( array_map( 'intval', $product->get_brand_ids( 'edit' ) ) );
+			$brand_ids = array_values( array_map( 'intval', $product->get_brand_ids( 'edit' ) ) );
+			sort( $brand_ids, SORT_NUMERIC );
+			$data['brand_ids'] = $brand_ids;
 		}
 
 		return $data;
@@ -63,6 +64,8 @@ final class WooCommerceProductExtras {
 				throw new RuntimeException( 'This WooCommerce version does not support product brands through its product model.' );
 			}
 			$this->validate_brand_ids( $data['brand_ids'] );
+			$data['brand_ids'] = array_values( array_map( 'intval', $data['brand_ids'] ) );
+			sort( $data['brand_ids'], SORT_NUMERIC );
 		}
 
 		return $data;
