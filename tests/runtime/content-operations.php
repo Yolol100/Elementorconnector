@@ -1,5 +1,6 @@
 <?php
 
+use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Content\AbilityBridge;
 use Webactueel\ElementorJsonBridge\Content\PostRequest;
 use Webactueel\ElementorJsonBridge\Content\ProductRequest;
@@ -45,7 +46,8 @@ wp_set_current_user( (int) $admin->ID );
 $documents  = new Documents();
 $validator  = new PayloadValidator();
 $content    = new WordPressDocument( $documents, $validator );
-$posts      = new PostRequest( $content, $documents, $validator );
+$snapshots  = new Snapshots();
+$posts      = new PostRequest( $content, $documents, $validator, $snapshots );
 $woo        = new WooCommerceProduct();
 $woo_extra  = new WooCommerceProductExtras();
 $products   = new ProductRequest( $woo, $woo_extra, $content );
@@ -110,21 +112,22 @@ try {
 	);
 	$page_id = (int) ( $page_result['post_id'] ?? 0 );
 	$cleanup_posts[] = $page_id;
-	if ( $page_id < 1 || 'draft' !== get_post_status( $page_id ) ) {
-		throw new RuntimeException( 'PostRequest did not create a draft page.' );
+	if ( $page_id < 1 || 'draft' !== get_post_status( $page_id ) || empty( $page_result['state_token'] ) ) {
+		throw new RuntimeException( 'PostRequest did not create a draft page with fresh-state context.' );
 	}
 
 	$before_title = get_the_title( $page_id );
 	$expect_runtime_exception(
-		static function () use ( $posts, $page_id ): void {
+		static function () use ( $posts, $content, $page_id ): void {
 			$posts->execute(
 				[
-					'format'     => PostRequest::FORMAT,
-					'version'    => PostRequest::VERSION,
-					'request_id' => 'runtime-post-invalid-author',
-					'action'     => 'update',
-					'post_id'    => $page_id,
-					'post'       => [ 'title' => 'Must Not Persist', 'author' => 999999999 ],
+					'format'               => PostRequest::FORMAT,
+					'version'              => PostRequest::VERSION,
+					'request_id'           => 'runtime-post-invalid-author',
+					'action'               => 'update',
+					'post_id'              => $page_id,
+					'expected_state_token' => $content->state_token( $page_id ),
+					'post'                 => [ 'title' => 'Must Not Persist', 'author' => 999999999 ],
 				]
 			);
 		},
@@ -134,14 +137,15 @@ try {
 		throw new RuntimeException( 'PostRequest changed content before rejecting invalid extended data.' );
 	}
 
-	$posts->execute(
+	$post_update_result = $posts->execute(
 		[
-			'format'     => PostRequest::FORMAT,
-			'version'    => PostRequest::VERSION,
-			'request_id' => 'runtime-post-update',
-			'action'     => 'update',
-			'post_id'    => $page_id,
-			'post'       => [
+			'format'               => PostRequest::FORMAT,
+			'version'              => PostRequest::VERSION,
+			'request_id'           => 'runtime-post-update',
+			'action'               => 'update',
+			'post_id'              => $page_id,
+			'expected_state_token' => $content->state_token( $page_id ),
+			'post'                 => [
 				'title'    => 'EJB Request Page Updated',
 				'content'  => '<p>Request page after.</p>',
 				'password' => 'runtime-pass',
@@ -152,6 +156,33 @@ try {
 	if ( ! $page instanceof WP_Post || 'EJB Request Page Updated' !== $page->post_title || 'runtime-pass' !== $page->post_password ) {
 		throw new RuntimeException( 'PostRequest update failed readback.' );
 	}
+	$snapshot_id = (int) ( $post_update_result['snapshot_id'] ?? 0 );
+	if ( $snapshot_id < 1 || $snapshots->payload( $snapshot_id, $page_id )['post']['title'] !== 'EJB Request Page' ) {
+		throw new RuntimeException( 'PostRequest did not persist a durable pre-update snapshot.' );
+	}
+
+	$stale_page_token = $content->state_token( $page_id );
+	wp_update_post( [ 'ID' => $page_id, 'post_title' => 'EJB Local Newer Title' ] );
+	$expect_runtime_exception(
+		static function () use ( $posts, $page_id, $stale_page_token ): void {
+			$posts->execute(
+				[
+					'format'               => PostRequest::FORMAT,
+					'version'              => PostRequest::VERSION,
+					'request_id'           => 'runtime-post-stale-update',
+					'action'               => 'update',
+					'post_id'              => $page_id,
+					'expected_state_token' => $stale_page_token,
+					'post'                 => [ 'title' => 'Stale Must Not Persist' ],
+				]
+			);
+		},
+		'PostRequest accepted stale target state.'
+	);
+	if ( 'EJB Local Newer Title' !== get_the_title( $page_id ) ) {
+		throw new RuntimeException( 'A stale post request overwrote a newer local edit.' );
+	}
+	wp_update_post( [ 'ID' => $page_id, 'post_title' => 'EJB Request Page Updated' ] );
 
 	$elementor_result = $posts->execute(
 		[
@@ -177,14 +208,15 @@ try {
 	}
 
 	$expect_runtime_exception(
-		static function () use ( $posts, $page_id ): void {
+		static function () use ( $posts, $content, $page_id ): void {
 			$posts->execute(
 				[
-					'format'     => PostRequest::FORMAT,
-					'version'    => PostRequest::VERSION,
-					'request_id' => 'runtime-post-delete-no-confirm',
-					'action'     => 'delete',
-					'post_id'    => $page_id,
+					'format'               => PostRequest::FORMAT,
+					'version'              => PostRequest::VERSION,
+					'request_id'           => 'runtime-post-delete-no-confirm',
+					'action'               => 'delete',
+					'post_id'              => $page_id,
+					'expected_state_token' => $content->state_token( $page_id ),
 				]
 			);
 		},
@@ -195,12 +227,13 @@ try {
 	}
 	$posts->execute(
 		[
-			'format'              => PostRequest::FORMAT,
-			'version'             => PostRequest::VERSION,
-			'request_id'          => 'runtime-post-delete',
-			'action'              => 'delete',
-			'post_id'             => $page_id,
-			'confirm_destructive' => true,
+			'format'               => PostRequest::FORMAT,
+			'version'              => PostRequest::VERSION,
+			'request_id'           => 'runtime-post-delete',
+			'action'               => 'delete',
+			'post_id'              => $page_id,
+			'expected_state_token' => $content->state_token( $page_id ),
+			'confirm_destructive'  => true,
 		]
 	);
 	if ( 'trash' !== get_post_status( $page_id ) ) {
@@ -219,19 +252,20 @@ try {
 	);
 	$term_id = (int) ( $term_result['term_id'] ?? 0 );
 	$cleanup_terms[] = [ $term_id, 'category' ];
-	if ( $term_id < 1 ) {
-		throw new RuntimeException( 'TaxonomyTerm did not create a category.' );
+	if ( $term_id < 1 || empty( $term_result['state_token'] ) ) {
+		throw new RuntimeException( 'TaxonomyTerm did not create a category with fresh-state context.' );
 	}
 
 	$terms->execute(
 		[
-			'format'     => TaxonomyTerm::FORMAT,
-			'version'    => TaxonomyTerm::VERSION,
-			'request_id' => 'runtime-term-update-acf',
-			'action'     => 'update',
-			'taxonomy'   => 'category',
-			'term_id'    => $term_id,
-			'data'       => [
+			'format'               => TaxonomyTerm::FORMAT,
+			'version'              => TaxonomyTerm::VERSION,
+			'request_id'           => 'runtime-term-update-acf',
+			'action'               => 'update',
+			'taxonomy'             => 'category',
+			'term_id'              => $term_id,
+			'expected_state_token' => $terms->state_token( $term_id, 'category' ),
+			'data'                 => [
 				'name' => 'EJB Runtime Request Category Updated',
 				'acf'  => [
 					'ejb_runtime_term_text' => [
@@ -244,20 +278,21 @@ try {
 		]
 	);
 	if ( 'EJB Runtime Request Category Updated' !== get_term( $term_id, 'category' )->name || 'term-value-after' !== get_field( 'field_ejb_runtime_term_text', 'term_' . $term_id ) ) {
-		throw new RuntimeException( 'TaxonomyTerm update failed readback.' );
+		throw new RuntimeException( 'TaxonomyTerm first ACF write failed readback.' );
 	}
 	$term_name_before_invalid = get_term( $term_id, 'category' )->name;
 	$expect_runtime_exception(
 		static function () use ( $terms, $term_id ): void {
 			$terms->execute(
 				[
-					'format'     => TaxonomyTerm::FORMAT,
-					'version'    => TaxonomyTerm::VERSION,
-					'request_id' => 'runtime-term-invalid-acf',
-					'action'     => 'update',
-					'taxonomy'   => 'category',
-					'term_id'    => $term_id,
-					'data'       => [
+					'format'               => TaxonomyTerm::FORMAT,
+					'version'              => TaxonomyTerm::VERSION,
+					'request_id'           => 'runtime-term-invalid-acf',
+					'action'               => 'update',
+					'taxonomy'             => 'category',
+					'term_id'              => $term_id,
+					'expected_state_token' => $terms->state_token( $term_id, 'category' ),
+					'data'                 => [
 						'name' => 'Must Not Persist',
 						'acf'  => [
 							'ejb_runtime_term_text' => [ 'key' => 'wrong-key', 'type' => 'text', 'value' => 'bad' ],
@@ -274,11 +309,11 @@ try {
 
 	$product_result = $products->execute(
 		[
-			'format'     => ProductRequest::FORMAT,
-			'version'    => ProductRequest::VERSION,
-			'request_id' => 'runtime-product-create',
-			'action'     => 'create',
-			'post'       => [ 'title' => 'EJB Runtime Product', 'slug' => 'ejb-runtime-product', 'content' => '<p>Product before</p>' ],
+			'format'      => ProductRequest::FORMAT,
+			'version'     => ProductRequest::VERSION,
+			'request_id'  => 'runtime-product-create',
+			'action'      => 'create',
+			'post'        => [ 'title' => 'EJB Runtime Product', 'slug' => 'ejb-runtime-product', 'content' => '<p>Product before</p>' ],
 			'woocommerce' => [ 'type' => 'simple', 'sku' => 'EJB-RUNTIME-001', 'global_unique_id' => '9780306406157', 'regular_price' => '19.90', 'manage_stock' => true, 'stock_quantity' => 8, 'low_stock_amount' => 2 ],
 		]
 	);
@@ -291,16 +326,17 @@ try {
 
 	$product_title_before_invalid = $product->get_name();
 	$expect_runtime_exception(
-		static function () use ( $products, $product_id ): void {
+		static function () use ( $products, $content, $product_id ): void {
 			$products->execute(
 				[
-					'format'     => ProductRequest::FORMAT,
-					'version'    => ProductRequest::VERSION,
-					'request_id' => 'runtime-product-invalid-woo',
-					'action'     => 'update',
-					'product_id' => $product_id,
-					'post'       => [ 'title' => 'Must Not Persist' ],
-					'woocommerce' => [ 'type' => 'simple', 'regular_price' => [ 'invalid' ] ],
+					'format'               => ProductRequest::FORMAT,
+					'version'              => ProductRequest::VERSION,
+					'request_id'           => 'runtime-product-invalid-woo',
+					'action'               => 'update',
+					'product_id'           => $product_id,
+					'expected_state_token' => $content->state_token( $product_id ),
+					'post'                 => [ 'title' => 'Must Not Persist' ],
+					'woocommerce'          => [ 'type' => 'simple', 'regular_price' => [ 'invalid' ] ],
 				]
 			);
 		},
@@ -334,14 +370,15 @@ try {
 	}
 	$products->execute(
 		[
-			'format'     => ProductRequest::FORMAT,
-			'version'    => ProductRequest::VERSION,
-			'request_id' => 'runtime-product-update',
-			'action'     => 'update',
-			'product_id' => $product_id,
-			'post'       => [ 'title' => 'EJB Runtime Product Updated', 'content' => '<p>Product after</p>', 'password' => 'product-pass' ],
-			'woocommerce' => $product_update_woo,
-			'taxonomies' => [ 'product_cat' => [ 'ejb-runtime-product-category' ] ],
+			'format'               => ProductRequest::FORMAT,
+			'version'              => ProductRequest::VERSION,
+			'request_id'           => 'runtime-product-update',
+			'action'               => 'update',
+			'product_id'           => $product_id,
+			'expected_state_token' => $content->state_token( $product_id ),
+			'post'                 => [ 'title' => 'EJB Runtime Product Updated', 'content' => '<p>Product after</p>', 'password' => 'product-pass' ],
+			'woocommerce'          => $product_update_woo,
+			'taxonomies'           => [ 'product_cat' => [ 'ejb-runtime-product-category' ] ],
 		]
 	);
 	$product = wc_get_product( $product_id );
@@ -356,14 +393,15 @@ try {
 	}
 
 	$expect_runtime_exception(
-		static function () use ( $products, $product_id ): void {
+		static function () use ( $products, $content, $product_id ): void {
 			$products->execute(
 				[
-					'format'     => ProductRequest::FORMAT,
-					'version'    => ProductRequest::VERSION,
-					'request_id' => 'runtime-product-delete-no-confirm',
-					'action'     => 'delete',
-					'product_id' => $product_id,
+					'format'               => ProductRequest::FORMAT,
+					'version'              => ProductRequest::VERSION,
+					'request_id'           => 'runtime-product-delete-no-confirm',
+					'action'               => 'delete',
+					'product_id'           => $product_id,
+					'expected_state_token' => $content->state_token( $product_id ),
 				]
 			);
 		},
@@ -371,12 +409,13 @@ try {
 	);
 	$products->execute(
 		[
-			'format'              => ProductRequest::FORMAT,
-			'version'             => ProductRequest::VERSION,
-			'request_id'          => 'runtime-product-trash',
-			'action'              => 'delete',
-			'product_id'          => $product_id,
-			'confirm_destructive' => true,
+			'format'               => ProductRequest::FORMAT,
+			'version'              => ProductRequest::VERSION,
+			'request_id'           => 'runtime-product-trash',
+			'action'               => 'delete',
+			'product_id'           => $product_id,
+			'expected_state_token' => $content->state_token( $product_id ),
+			'confirm_destructive'  => true,
 		]
 	);
 	if ( 'trash' !== get_post_status( $product_id ) ) {
@@ -390,13 +429,14 @@ try {
 	$cleanup_posts[] = $force_product_id;
 	$products->execute(
 		[
-			'format'              => ProductRequest::FORMAT,
-			'version'             => ProductRequest::VERSION,
-			'request_id'          => 'runtime-product-force-delete',
-			'action'              => 'delete',
-			'product_id'          => $force_product_id,
-			'confirm_destructive' => true,
-			'force'               => true,
+			'format'               => ProductRequest::FORMAT,
+			'version'              => ProductRequest::VERSION,
+			'request_id'           => 'runtime-product-force-delete',
+			'action'               => 'delete',
+			'product_id'           => $force_product_id,
+			'expected_state_token' => $content->state_token( $force_product_id ),
+			'confirm_destructive'  => true,
+			'force'                => true,
 		]
 	);
 	if ( null !== get_post( $force_product_id ) ) {
@@ -405,11 +445,11 @@ try {
 
 	$variable_result = $products->execute(
 		[
-			'format'     => ProductRequest::FORMAT,
-			'version'    => ProductRequest::VERSION,
-			'request_id' => 'runtime-variable-create',
-			'action'     => 'create',
-			'post'       => [ 'title' => 'EJB Runtime Variable' ],
+			'format'      => ProductRequest::FORMAT,
+			'version'     => ProductRequest::VERSION,
+			'request_id'  => 'runtime-variable-create',
+			'action'      => 'create',
+			'post'        => [ 'title' => 'EJB Runtime Variable' ],
 			'woocommerce' => [ 'type' => 'variable' ],
 		]
 	);
@@ -430,13 +470,14 @@ try {
 	$cleanup_posts[] = $variation_id;
 	$variations->execute(
 		[
-			'format'       => ProductVariation::FORMAT,
-			'version'      => ProductVariation::VERSION,
-			'request_id'   => 'runtime-variation-update',
-			'action'       => 'update',
-			'product_id'   => $variable_id,
-			'variation_id' => $variation_id,
-			'data'         => [ 'regular_price' => '12.00', 'stock_quantity' => 2 ],
+			'format'               => ProductVariation::FORMAT,
+			'version'              => ProductVariation::VERSION,
+			'request_id'           => 'runtime-variation-update',
+			'action'               => 'update',
+			'product_id'           => $variable_id,
+			'variation_id'         => $variation_id,
+			'expected_state_token' => $variations->state_token( $variable_id, $variation_id ),
+			'data'                 => [ 'regular_price' => '12.00', 'stock_quantity' => 2 ],
 		]
 	);
 	$variation = wc_get_product( $variation_id );
@@ -448,13 +489,14 @@ try {
 		static function () use ( $variations, $variable_id, $variation_id ): void {
 			$variations->execute(
 				[
-					'format'       => ProductVariation::FORMAT,
-					'version'      => ProductVariation::VERSION,
-					'request_id'   => 'runtime-variation-invalid',
-					'action'       => 'update',
-					'product_id'   => $variable_id,
-					'variation_id' => $variation_id,
-					'data'         => [ 'regular_price' => '99.00', 'download_limit' => -1 ],
+					'format'               => ProductVariation::FORMAT,
+					'version'              => ProductVariation::VERSION,
+					'request_id'           => 'runtime-variation-invalid',
+					'action'               => 'update',
+					'product_id'           => $variable_id,
+					'variation_id'         => $variation_id,
+					'expected_state_token' => $variations->state_token( $variable_id, $variation_id ),
+					'data'                 => [ 'regular_price' => '99.00', 'download_limit' => -1 ],
 				]
 			);
 		},
@@ -466,13 +508,14 @@ try {
 	}
 	$variations->execute(
 		[
-			'format'              => ProductVariation::FORMAT,
-			'version'             => ProductVariation::VERSION,
-			'request_id'          => 'runtime-variation-delete',
-			'action'              => 'delete',
-			'product_id'          => $variable_id,
-			'variation_id'        => $variation_id,
-			'confirm_destructive' => true,
+			'format'               => ProductVariation::FORMAT,
+			'version'              => ProductVariation::VERSION,
+			'request_id'           => 'runtime-variation-delete',
+			'action'               => 'delete',
+			'product_id'           => $variable_id,
+			'variation_id'         => $variation_id,
+			'expected_state_token' => $variations->state_token( $variable_id, $variation_id ),
+			'confirm_destructive'  => true,
 		]
 	);
 	if ( null !== get_post( $variation_id ) ) {
@@ -558,8 +601,10 @@ try {
 			'yoast'                     => WPSEO_VERSION,
 			'woocommerce'               => WC_VERSION,
 			'post_request_crud'         => true,
+			'post_stale_rejection'      => true,
+			'post_durable_snapshot'     => true,
 			'elementor_create'          => true,
-			'term_crud_acf'             => true,
+			'term_crud_acf_first_write' => true,
 			'product_crud_soft_delete'  => true,
 			'product_force_delete'      => true,
 			'variation_crud'            => true,
