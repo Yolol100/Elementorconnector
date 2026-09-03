@@ -52,6 +52,11 @@ final class ProductRequest {
 		if ( ! current_user_can( 'edit_post', $id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WooCommerce product.' );
 		}
+		if ( 'read' === $action ) {
+			return $this->result( 'read', $id );
+		}
+
+		$this->content->assert_state_token( $id, $request['expected_state_token'] ?? null );
 		if ( 'delete' === $action ) {
 			return $this->delete_product( $id, $request );
 		}
@@ -65,7 +70,7 @@ final class ProductRequest {
 		$current_woo     = $this->woo_payload( $id );
 		$desired_content = $this->desired_content( $id, $current_content, $core, $request, true );
 		$desired_woo     = $this->desired_woo( $id, $current_woo, $woo );
-		[ $desired_content, $desired_woo ] = $this->synchronize_product_brand( $desired_content, $desired_woo, $request );
+		[ $desired_content, $desired_woo ] = $this->align_brand_state( $desired_content, $desired_woo, $request );
 
 		$this->validate_core_extras( $core, true );
 		$this->apply_core( $id, $core, true );
@@ -80,7 +85,7 @@ final class ProductRequest {
 		$before_password = (string) get_post_field( 'post_password', $id, 'raw' );
 		$desired_content = $this->desired_content( $id, $before_content, $core, $request, false );
 		$desired_woo     = $this->desired_woo( $id, $before_woo, $woo );
-		[ $desired_content, $desired_woo ] = $this->synchronize_product_brand( $desired_content, $desired_woo, $request );
+		[ $desired_content, $desired_woo ] = $this->align_brand_state( $desired_content, $desired_woo, $request );
 
 		$this->validate_core_extras( $core, false );
 		try {
@@ -149,62 +154,60 @@ final class ProductRequest {
 		return array_merge( $base, $extras );
 	}
 
-
-	private function synchronize_product_brand( array $content, array $woo, array $request ): array {
-		$woocommerce_request = is_array( $request['woocommerce'] ?? null ) ? $request['woocommerce'] : [];
-		$taxonomy_request    = is_array( $request['taxonomies'] ?? null ) ? $request['taxonomies'] : [];
-		$has_brand_ids       = array_key_exists( 'brand_ids', $woocommerce_request );
-		$has_brand_slugs     = array_key_exists( 'product_brand', $taxonomy_request );
-
-		if ( ! $has_brand_ids && ! $has_brand_slugs ) {
+	private function align_brand_state( array $content, array $woo, array $request ): array {
+		if ( ! array_key_exists( 'brand_ids', $woo ) || ! taxonomy_exists( 'product_brand' ) ) {
 			return [ $content, $woo ];
 		}
-		if ( ! taxonomy_exists( 'product_brand' ) ) {
-			throw new RuntimeException( 'WooCommerce product brands are not registered on this site.' );
+
+		$woo_requested = is_array( $request['woocommerce'] ?? null ) && array_key_exists( 'brand_ids', $request['woocommerce'] );
+		$taxonomy_requested = is_array( $request['taxonomies'] ?? null ) && array_key_exists( 'product_brand', $request['taxonomies'] );
+		if ( ! $woo_requested && ! $taxonomy_requested ) {
+			return [ $content, $woo ];
 		}
 
-		$brand_ids   = $has_brand_ids ? array_values( array_unique( array_map( 'intval', $woo['brand_ids'] ?? [] ) ) ) : [];
-		$brand_slugs = $has_brand_slugs ? array_values( array_unique( array_map( 'strval', $content['taxonomies']['product_brand'] ?? [] ) ) ) : [];
-		sort( $brand_ids, SORT_NUMERIC );
-		sort( $brand_slugs, SORT_STRING );
+		$woo_ids = array_values( array_map( 'intval', $woo['brand_ids'] ) );
+		sort( $woo_ids, SORT_NUMERIC );
+		$taxonomy_slugs = is_array( $content['taxonomies']['product_brand'] ?? null ) ? array_values( array_map( 'strval', $content['taxonomies']['product_brand'] ) ) : [];
+		sort( $taxonomy_slugs, SORT_STRING );
 
-		$ids_from_slugs = $has_brand_slugs ? $this->product_brand_ids( $brand_slugs ) : [];
-		$slugs_from_ids = $has_brand_ids ? $this->product_brand_slugs( $brand_ids ) : [];
-		if ( $has_brand_ids && $has_brand_slugs && $brand_ids !== $ids_from_slugs ) {
-			throw new RuntimeException( 'WooCommerce brand_ids conflict with taxonomies.product_brand.' );
+		if ( $woo_requested ) {
+			$woo_slugs = $this->brand_slugs( $woo_ids );
+			if ( $taxonomy_requested && $taxonomy_slugs !== $woo_slugs ) {
+				throw new RuntimeException( 'WooCommerce brand_ids and product_brand taxonomy input describe different brands.' );
+			}
+			$content['taxonomies']['product_brand'] = $woo_slugs;
+			$woo['brand_ids'] = $woo_ids;
+			return [ $content, $woo ];
 		}
 
-		$woo['brand_ids']                          = $has_brand_ids ? $brand_ids : $ids_from_slugs;
-		$content['taxonomies']['product_brand']     = $has_brand_slugs ? $brand_slugs : $slugs_from_ids;
+		$woo['brand_ids'] = $this->brand_ids( $taxonomy_slugs );
 		return [ $content, $woo ];
 	}
 
-	private function product_brand_ids( array $slugs ): array {
-		$ids = [];
-		foreach ( $slugs as $slug ) {
-			$term = get_term_by( 'slug', $slug, 'product_brand' );
-			if ( ! $term instanceof \WP_Term ) {
-				throw new RuntimeException( 'A requested WooCommerce product brand no longer exists.' );
-			}
-			$ids[] = (int) $term->term_id;
-		}
-		$ids = array_values( array_unique( $ids ) );
-		sort( $ids, SORT_NUMERIC );
-		return $ids;
-	}
-
-	private function product_brand_slugs( array $ids ): array {
+	private function brand_slugs( array $brand_ids ): array {
 		$slugs = [];
-		foreach ( $ids as $id ) {
-			$term = get_term( $id, 'product_brand' );
+		foreach ( $brand_ids as $brand_id ) {
+			$term = get_term( $brand_id, 'product_brand' );
 			if ( ! $term instanceof \WP_Term ) {
-				throw new RuntimeException( 'A requested WooCommerce product brand no longer exists.' );
+				throw new RuntimeException( 'A requested WooCommerce brand no longer exists.' );
 			}
 			$slugs[] = (string) $term->slug;
 		}
-		$slugs = array_values( array_unique( $slugs ) );
 		sort( $slugs, SORT_STRING );
 		return $slugs;
+	}
+
+	private function brand_ids( array $brand_slugs ): array {
+		$ids = [];
+		foreach ( $brand_slugs as $slug ) {
+			$term = get_term_by( 'slug', $slug, 'product_brand' );
+			if ( ! $term instanceof \WP_Term ) {
+				throw new RuntimeException( 'A requested WooCommerce product_brand term no longer exists.' );
+			}
+			$ids[] = (int) $term->term_id;
+		}
+		sort( $ids, SORT_NUMERIC );
+		return $ids;
 	}
 
 	private function apply_woo( int $id, array $woo ): void {
@@ -278,9 +281,10 @@ final class ProductRequest {
 	private function result( string $status, int $id ): array {
 		$product = wc_get_product( $id );
 		return [
-			'status'     => $status,
-			'product_id' => $id,
-			'post'       => [
+			'status'       => $status,
+			'product_id'   => $id,
+			'state_token'  => $this->content->state_token( $id ),
+			'post'         => [
 				'title'          => $product instanceof \WC_Product ? (string) $product->get_name( 'edit' ) : '',
 				'status'         => $product instanceof \WC_Product ? (string) $product->get_status( 'edit' ) : '',
 				'content'        => $product instanceof \WC_Product ? (string) $product->get_description( 'edit' ) : '',
@@ -292,18 +296,22 @@ final class ProductRequest {
 	}
 
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'confirm_destructive', 'force', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'expected_state_token', 'confirm_destructive', 'force', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The product request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
 			throw new RuntimeException( 'The product request format or version is invalid.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) ) {
 			throw new RuntimeException( 'The product request action is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['product_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a product requires an exact product_id.' );
+		if ( 'create' !== $action && (int) ( $request['product_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a product requires an exact product_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['expected_state_token'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['expected_state_token'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a product requires a valid expected_state_token.' );
 		}
 		foreach ( [ 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $field ) {
 			if ( isset( $request[ $field ] ) && ( ! is_array( $request[ $field ] ) || ( [] !== $request[ $field ] && array_is_list( $request[ $field ] ) ) ) ) {

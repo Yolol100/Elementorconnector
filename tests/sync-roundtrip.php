@@ -22,6 +22,12 @@ $GLOBALS['ejb_meta'] = [];
 $GLOBALS['ejb_post'] = new WP_Post(123, 'page');
 $GLOBALS['ejb_saved_payload'] = null;
 $GLOBALS['ejb_readback_mismatches_left'] = 0;
+$GLOBALS['ejb_extended_state'] = [
+    'author' => 7,
+    'date' => '2026-09-03 08:00:00',
+    'password' => 'base-password',
+    'format' => '',
+];
 
 if (!function_exists('get_post_meta')) {
     function get_post_meta(int $post_id, string $key, bool $single = false): mixed {
@@ -152,18 +158,45 @@ final class EJB_Test_GitHub_Client {
 
 final class EJB_Test_Snapshots {
     public array $items = [];
+    public array $extra = [];
     private int $next_id = 1;
 
-    public function create(int $post_id, array $payload, string $reason, string $sha = ''): int {
+    public function create(int $post_id, array $payload, string $reason, string $sha = '', array $extra_state = []): int {
         unset($post_id, $reason, $sha);
         $id = $this->next_id++;
         $this->items[$id] = $payload;
+        $this->extra[$id] = $extra_state;
         return $id;
     }
 
     public function payload(int $snapshot_id, int $post_id): array {
         unset($post_id);
         return $this->items[$snapshot_id];
+    }
+
+    public function extra_state(int $snapshot_id, int $post_id): array {
+        unset($post_id);
+        return $this->extra[$snapshot_id] ?? [];
+    }
+}
+
+final class EJB_Test_Post_State {
+    public static function read(int $post_id): array {
+        if ($post_id !== 123) {
+            throw new RuntimeException('Unexpected post state target.');
+        }
+        return $GLOBALS['ejb_extended_state'];
+    }
+
+    public static function validate(int $post_id, array $state): void {
+        if ($post_id !== 123 || array_is_list($state)) {
+            throw new RuntimeException('Invalid extended state.');
+        }
+    }
+
+    public static function apply(int $post_id, array $state): void {
+        self::validate($post_id, $state);
+        $GLOBALS['ejb_extended_state'] = $state;
     }
 }
 
@@ -181,6 +214,7 @@ final class EJB_Test_Lock {
 class_alias(EJB_Test_Content::class, 'Webactueel\\ElementorJsonBridge\\Content\\WordPressDocument');
 class_alias(EJB_Test_GitHub_Client::class, 'Webactueel\\ElementorJsonBridge\\GitHub\\Client');
 class_alias(EJB_Test_Snapshots::class, 'Webactueel\\ElementorJsonBridge\\Backup\\Snapshots');
+class_alias(EJB_Test_Post_State::class, 'Webactueel\\ElementorJsonBridge\\Content\\PostState');
 class_alias(EJB_Test_Lock::class, 'Webactueel\\ElementorJsonBridge\\Sync\\Lock');
 
 require_once $root . '/includes/Sync/Manager.php';
@@ -205,6 +239,7 @@ $incoming['post']['content'] = '<p>Remote</p>';
 $base_hash = CanonicalJson::hash($base);
 $incoming_hash = CanonicalJson::hash($incoming);
 $remote_sha = 'remote-sha-2';
+$base_extended = $GLOBALS['ejb_extended_state'];
 
 $GLOBALS['ejb_meta'] = [
     State::META_STATUS => State::REMOTE_PENDING,
@@ -216,6 +251,7 @@ $GLOBALS['ejb_meta'] = [
 ];
 $GLOBALS['ejb_saved_payload'] = null;
 $GLOBALS['ejb_readback_mismatches_left'] = 0;
+$GLOBALS['ejb_extended_state'] = $base_extended;
 
 $content = new EJB_Test_Content($base);
 $github = new EJB_Test_GitHub_Client([
@@ -241,6 +277,9 @@ if (($GLOBALS['ejb_meta'][State::META_BASE_HASH] ?? '') !== $incoming_hash) {
 if (isset($GLOBALS['ejb_meta'][State::META_PENDING_SHA]) || isset($GLOBALS['ejb_meta'][State::META_PENDING_HASH])) {
     throw new RuntimeException('Successful remote apply left pending metadata behind.');
 }
+if (($snapshots->extra[(int) ($result['snapshot_id'] ?? 0)] ?? null) !== $base_extended) {
+    throw new RuntimeException('Remote apply did not snapshot the extended WordPress state.');
+}
 
 $GLOBALS['ejb_meta'] = [
     State::META_STATUS => State::REMOTE_PENDING,
@@ -252,6 +291,7 @@ $GLOBALS['ejb_meta'] = [
 ];
 $GLOBALS['ejb_saved_payload'] = null;
 $GLOBALS['ejb_readback_mismatches_left'] = 1;
+$GLOBALS['ejb_extended_state'] = $base_extended;
 
 $content = new EJB_Test_Content($base);
 $github = new EJB_Test_GitHub_Client([
@@ -272,6 +312,9 @@ if (!$failed) {
 }
 if (CanonicalJson::hash($content->payload(123)) !== $base_hash) {
     throw new RuntimeException('Rollback did not restore the previous WordPress payload.');
+}
+if ($GLOBALS['ejb_extended_state'] !== $base_extended) {
+    throw new RuntimeException('Rollback did not restore the extended WordPress state.');
 }
 if (($GLOBALS['ejb_meta'][State::META_STATUS] ?? '') !== State::ERROR) {
     throw new RuntimeException('Rollback path did not leave an explicit error state.');

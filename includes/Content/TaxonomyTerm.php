@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
+use Webactueel\ElementorJsonBridge\Support\StateToken;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -43,7 +44,13 @@ final class TaxonomyTerm {
 				wp_delete_term( $term_id, $taxonomy );
 				throw $throwable;
 			}
-			return [ 'status' => 'created', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
+			return [
+				'status'      => 'created',
+				'taxonomy'    => $taxonomy,
+				'term_id'     => $term_id,
+				'data'        => $readback,
+				'state_token' => $this->state_token( $term_id, $taxonomy ),
+			];
 		}
 
 		$term_id = (int) ( $request['term_id'] ?? 0 );
@@ -52,6 +59,20 @@ final class TaxonomyTerm {
 			throw new RuntimeException( 'The requested taxonomy term does not exist.' );
 		}
 
+		if ( 'read' === $action ) {
+			if ( ! current_user_can( $object->cap->edit_terms ) ) {
+				throw new RuntimeException( 'You are not allowed to read managed terms in this taxonomy.' );
+			}
+			return [
+				'status'      => 'read',
+				'taxonomy'    => $taxonomy,
+				'term_id'     => $term_id,
+				'data'        => $this->payload( $term_id, $taxonomy ),
+				'state_token' => $this->state_token( $term_id, $taxonomy ),
+			];
+		}
+
+		$this->assert_state_token( $term_id, $taxonomy, $request['expected_state_token'] ?? null );
 		if ( 'delete' === $action ) {
 			if ( ! current_user_can( $object->cap->delete_terms ) ) {
 				throw new RuntimeException( 'You are not allowed to delete terms in this taxonomy.' );
@@ -103,7 +124,7 @@ final class TaxonomyTerm {
 				if ( is_wp_error( $restored ) ) {
 					throw new RuntimeException( 'WordPress rejected taxonomy rollback.' );
 				}
-				$this->apply_acf( $term_id, $taxonomy, $before['acf'] );
+				$this->apply_acf( $term_id, $taxonomy, $before['acf'], true );
 				$this->apply_yoast( $term_id, $taxonomy, $before['yoast'] );
 				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $term_id, $taxonomy ) ) ) ) {
 					throw new RuntimeException( 'Taxonomy rollback failed exact readback verification.' );
@@ -113,7 +134,23 @@ final class TaxonomyTerm {
 			}
 			throw new RuntimeException( 'Taxonomy update failed. The previous term state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
+		return [
+			'status'      => 'updated',
+			'taxonomy'    => $taxonomy,
+			'term_id'     => $term_id,
+			'data'        => $readback,
+			'state_token' => $this->state_token( $term_id, $taxonomy ),
+		];
+	}
+
+	public function state_token( int $term_id, string $taxonomy ): string {
+		return StateToken::issue(
+			[
+				'taxonomy' => $taxonomy,
+				'term_id'  => $term_id,
+				'data'     => $this->payload( $term_id, $taxonomy ),
+			]
+		);
 	}
 
 	public function inventory(): array {
@@ -148,19 +185,34 @@ final class TaxonomyTerm {
 		return $result;
 	}
 
+	private function assert_state_token( int $term_id, string $taxonomy, mixed $expected ): void {
+		StateToken::assert_matches(
+			$expected,
+			[
+				'taxonomy' => $taxonomy,
+				'term_id'  => $term_id,
+				'data'     => $this->payload( $term_id, $taxonomy ),
+			]
+		);
+	}
+
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'taxonomy', 'term_id', 'data', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'taxonomy', 'term_id', 'data', 'expected_state_token', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The taxonomy term request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
 			throw new RuntimeException( 'The taxonomy term request format or version is invalid.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) || '' === sanitize_key( (string) ( $request['taxonomy'] ?? '' ) ) ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) || '' === sanitize_key( (string) ( $request['taxonomy'] ?? '' ) ) ) {
 			throw new RuntimeException( 'The taxonomy term request action or taxonomy is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['term_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a term requires an exact term_id.' );
+		if ( 'create' !== $action && (int) ( $request['term_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a term requires an exact term_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['expected_state_token'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['expected_state_token'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a term requires a valid expected_state_token.' );
 		}
 		if ( isset( $request['data'] ) && ( ! is_array( $request['data'] ) || ( [] !== $request['data'] && array_is_list( $request['data'] ) ) ) ) {
 			throw new RuntimeException( 'Taxonomy term data must be an object.' );
@@ -252,7 +304,7 @@ final class TaxonomyTerm {
 		if ( ! function_exists( 'get_field_objects' ) ) {
 			return [];
 		}
-		$objects = get_field_objects( $this->acf_object_id( $term_id ), false, true, false );
+		$objects = get_field_objects( 'term_' . $term_id, false, true, false );
 		if ( ! is_array( $objects ) ) {
 			return [];
 		}
@@ -274,70 +326,23 @@ final class TaxonomyTerm {
 		if ( [] === $acf ) {
 			return;
 		}
-		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'acf_get_field_groups' ) || ! function_exists( 'acf_get_fields' ) || ! function_exists( 'update_field' ) ) {
+		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'update_field' ) ) {
 			throw new RuntimeException( 'ACF taxonomy data is present but Advanced Custom Fields is not active.' );
 		}
-
-		$this->acf_object_id( $term_id );
-		$definitions = $this->acf_field_definitions( $taxonomy );
-		foreach ( $acf as $name => $field ) {
-			$keys = is_array( $field ) ? array_keys( $field ) : [];
-			sort( $keys, SORT_STRING );
-			$key        = is_array( $field ) && is_string( $field['key'] ?? null ) ? $field['key'] : '';
-			$type       = is_array( $field ) && is_string( $field['type'] ?? null ) ? $field['type'] : '';
-			$definition = $definitions[ $key ] ?? null;
-			if ( ! is_string( $name ) || [ 'key', 'type', 'value' ] !== $keys || ! is_array( $definition ) || $name !== $definition['name'] || $type !== $definition['type'] ) {
-				throw new RuntimeException( 'The ACF taxonomy field identity no longer matches the site.' );
-			}
-		}
+		AcfFields::validate_taxonomy( $taxonomy, $acf, $this->acf( $term_id ) );
 	}
 
-	private function apply_acf( int $term_id, string $taxonomy, mixed $acf ): void {
-		$this->validate_acf( $term_id, $taxonomy, $acf );
-		foreach ( $acf as $field ) {
-			update_field( (string) $field['key'], $field['value'], $this->acf_object_id( $term_id ) );
+	private function apply_acf( int $term_id, string $taxonomy, mixed $acf, bool $authoritative = false ): void {
+		if ( ! is_array( $acf ) || ( [] !== $acf && array_is_list( $acf ) ) ) {
+			throw new RuntimeException( 'Taxonomy ACF data must be an object.' );
 		}
-	}
-
-	private function acf_field_definitions( string $taxonomy ): array {
-		$field_groups = acf_get_field_groups( [ 'taxonomy' => $taxonomy ] );
-		if ( ! is_array( $field_groups ) ) {
-			return [];
+		$current = $this->acf( $term_id );
+		$desired = $authoritative ? $acf : array_replace( $current, $acf );
+		if ( [] === $desired && [] === $current ) {
+			return;
 		}
-
-		$definitions = [];
-		foreach ( $field_groups as $field_group ) {
-			$fields = is_array( $field_group ) ? acf_get_fields( $field_group ) : [];
-			if ( ! is_array( $fields ) ) {
-				continue;
-			}
-			foreach ( $fields as $field ) {
-				if ( ! is_array( $field ) ) {
-					continue;
-				}
-				$key  = is_string( $field['key'] ?? null ) ? $field['key'] : '';
-				$name = is_string( $field['name'] ?? null ) ? $field['name'] : '';
-				$type = is_string( $field['type'] ?? null ) ? $field['type'] : '';
-				if ( '' === $key || '' === $name || '' === $type ) {
-					continue;
-				}
-				$definition = [ 'name' => $name, 'type' => $type ];
-				if ( isset( $definitions[ $key ] ) && $definition !== $definitions[ $key ] ) {
-					throw new RuntimeException( 'The ACF taxonomy field registry contains a conflicting field identity.' );
-				}
-				$definitions[ $key ] = $definition;
-			}
-		}
-		ksort( $definitions, SORT_STRING );
-		return $definitions;
-	}
-
-	private function acf_object_id( int $term_id ): string {
-		$term = get_term( $term_id );
-		if ( ! $term instanceof \WP_Term ) {
-			throw new RuntimeException( 'The taxonomy term no longer exists for ACF.' );
-		}
-		return $term->taxonomy . '_' . $term_id;
+		AcfFields::validate_taxonomy( $taxonomy, $desired, $current );
+		AcfFields::apply_authoritative( 'term_' . $term_id, $desired, $current );
 	}
 
 	private function yoast( \WP_Term $term, string $taxonomy ): array {

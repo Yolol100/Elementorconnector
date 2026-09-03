@@ -5,6 +5,7 @@ namespace Webactueel\ElementorJsonBridge\Sync;
 use RuntimeException;
 use Throwable;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
+use Webactueel\ElementorJsonBridge\Content\PostState;
 use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\GitHub\Client;
 use Webactueel\ElementorJsonBridge\Settings;
@@ -199,8 +200,9 @@ final class Manager {
 				return [ 'status' => State::CLEAN, 'message' => 'The live content already matches the known GitHub version.' ];
 			}
 
-			$current      = $this->content->payload( $post_id );
-			$current_hash = CanonicalJson::hash( $current );
+			$current          = $this->content->payload( $post_id );
+			$current_extended = PostState::read( $post_id );
+			$current_hash     = CanonicalJson::hash( $current );
 			if ( '' === $base_hash || ! hash_equals( $base_hash, $current_hash ) ) {
 				$this->set_error( $post_id, State::CONFLICT, 'The live WordPress content changed after the last synchronization.' );
 				throw new RuntimeException( 'The live WordPress content changed. The GitHub version was not applied.' );
@@ -211,7 +213,7 @@ final class Manager {
 			if ( ! hash_equals( $pending_hash, $incoming_hash ) ) {
 				throw new RuntimeException( 'The checked GitHub content no longer matches the pending fingerprint.' );
 			}
-			$snapshot_id = $this->snapshots->create( $post_id, $current, 'before_remote_apply', (string) $remote['sha'] );
+			$snapshot_id = $this->snapshots->create( $post_id, $current, 'before_remote_apply', (string) $remote['sha'], $current_extended );
 
 			$this->set_status( $post_id, State::APPLYING );
 			self::$applying = true;
@@ -223,12 +225,11 @@ final class Manager {
 				}
 			} catch ( Throwable $apply_error ) {
 				try {
-					$rollback = $this->snapshots->payload( $snapshot_id, $post_id );
+					$rollback          = $this->snapshots->payload( $snapshot_id, $post_id );
+					$rollback_extended = $this->snapshots->extra_state( $snapshot_id, $post_id );
 					$this->content->apply( $post_id, $rollback );
-					$restored = $this->content->payload( $post_id );
-					if ( ! hash_equals( $current_hash, CanonicalJson::hash( $restored ) ) ) {
-						throw new RuntimeException( 'Rollback verification failed.' );
-					}
+					PostState::apply( $post_id, $rollback_extended );
+					$this->verify_snapshot_state( $post_id, $rollback, $rollback_extended, 'Rollback verification failed.' );
 				} catch ( Throwable $rollback_error ) {
 					$this->set_error( $post_id, State::ERROR, 'Apply failed and rollback could not be verified: ' . $rollback_error->getMessage() );
 					throw new RuntimeException( 'Apply failed and rollback could not be verified.', 0, $apply_error );
@@ -254,24 +255,29 @@ final class Manager {
 	public function restore_snapshot( int $post_id, int $snapshot_id ): array {
 		$token = $this->lock->acquire( $post_id );
 		try {
-			$current = $this->content->payload( $post_id );
-			$restore = $this->content->validate_array( $this->snapshots->payload( $snapshot_id, $post_id ), $post_id );
-			$this->snapshots->create( $post_id, $current, 'before_manual_restore', (string) get_post_meta( $post_id, State::META_REMOTE_SHA, true ) );
+			$current          = $this->content->payload( $post_id );
+			$current_extended = PostState::read( $post_id );
+			$restore          = $this->content->validate_array( $this->snapshots->payload( $snapshot_id, $post_id ), $post_id );
+			$restore_extended = $this->snapshots->extra_state( $snapshot_id, $post_id );
+			PostState::validate( $post_id, $restore_extended );
+			$this->snapshots->create(
+				$post_id,
+				$current,
+				'before_manual_restore',
+				(string) get_post_meta( $post_id, State::META_REMOTE_SHA, true ),
+				$current_extended
+			);
 
 			self::$applying = true;
 			try {
 				try {
 					$this->content->apply( $post_id, $restore );
-					$readback = $this->content->payload( $post_id );
-					if ( ! hash_equals( CanonicalJson::hash( $restore ), CanonicalJson::hash( $readback ) ) ) {
-						throw new RuntimeException( 'Restored snapshot failed roundtrip verification.' );
-					}
+					PostState::apply( $post_id, $restore_extended );
+					$this->verify_snapshot_state( $post_id, $restore, $restore_extended, 'Restored snapshot failed roundtrip verification.' );
 				} catch ( Throwable $restore_error ) {
 					$this->content->apply( $post_id, $current );
-					$rollback = $this->content->payload( $post_id );
-					if ( ! hash_equals( CanonicalJson::hash( $current ), CanonicalJson::hash( $rollback ) ) ) {
-						throw new RuntimeException( 'Snapshot restore failed and the pre-restore version could not be verified.', 0, $restore_error );
-					}
+					PostState::apply( $post_id, $current_extended );
+					$this->verify_snapshot_state( $post_id, $current, $current_extended, 'Snapshot restore failed and the pre-restore version could not be verified.' );
 					throw new RuntimeException( 'Snapshot restore failed. The pre-restore version was restored.', 0, $restore_error );
 				}
 			} finally {
@@ -449,6 +455,19 @@ final class Manager {
 		};
 		$root = (string) Settings::get( 'repo_root', 'site-data' );
 		return trim( $root . '/' . $folder . '/' . $post_id . '.json', '/' );
+	}
+
+	private function verify_snapshot_state( int $post_id, array $content, array $extended, string $message ): void {
+		$readback = $this->content->payload( $post_id );
+		if ( ! hash_equals( CanonicalJson::hash( $content ), CanonicalJson::hash( $readback ) ) ) {
+			throw new RuntimeException( $message );
+		}
+		$current_extended = PostState::read( $post_id );
+		foreach ( $extended as $field => $value ) {
+			if ( ! array_key_exists( $field, $current_extended ) || $current_extended[ $field ] !== $value ) {
+				throw new RuntimeException( $message );
+			}
+		}
 	}
 
 	private function mark_synced( int $post_id, string $path, string $hash, string $sha, string $status ): void {

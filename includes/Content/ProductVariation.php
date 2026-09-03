@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
+use Webactueel\ElementorJsonBridge\Support\StateToken;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -43,7 +44,13 @@ final class ProductVariation {
 				}
 				throw $throwable;
 			}
-			return [ 'status' => 'created', 'product_id' => $product_id, 'variation_id' => $id, 'data' => $data ];
+			return [
+				'status'       => 'created',
+				'product_id'   => $product_id,
+				'variation_id' => $id,
+				'data'         => $data,
+				'state_token'  => $this->token_for( $variation ),
+			];
 		}
 
 		$variation_id = (int) ( $request['variation_id'] ?? 0 );
@@ -54,7 +61,17 @@ final class ProductVariation {
 		if ( ! current_user_can( 'edit_post', $variation_id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WooCommerce variation.' );
 		}
+		if ( 'read' === $action ) {
+			return [
+				'status'       => 'read',
+				'product_id'   => $product_id,
+				'variation_id' => $variation_id,
+				'data'         => $this->payload( $variation ),
+				'state_token'  => $this->token_for( $variation ),
+			];
+		}
 
+		StateToken::assert_matches( $request['expected_state_token'] ?? null, $this->token_state( $variation ) );
 		if ( 'delete' === $action ) {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting a WooCommerce variation requires confirm_destructive=true.' );
@@ -84,22 +101,41 @@ final class ProductVariation {
 			}
 			throw new RuntimeException( 'WooCommerce variation update failed. The previous variation state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'product_id' => $product_id, 'variation_id' => $variation_id, 'data' => $data ];
+		return [
+			'status'       => 'updated',
+			'product_id'   => $product_id,
+			'variation_id' => $variation_id,
+			'data'         => $data,
+			'state_token'  => $this->token_for( $variation ),
+		];
+	}
+
+	public function state_token( int $product_id, int $variation_id ): string {
+		$this->parent( $product_id );
+		$variation = wc_get_product( $variation_id );
+		if ( ! $variation instanceof \WC_Product_Variation || (int) $variation->get_parent_id() !== $product_id ) {
+			throw new RuntimeException( 'The requested WooCommerce variation does not belong to this product.' );
+		}
+		return $this->token_for( $variation );
 	}
 
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'variation_id', 'data', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'variation_id', 'data', 'expected_state_token', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The variation request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
 			throw new RuntimeException( 'The variation request format or version is invalid.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) || (int) ( $request['product_id'] ?? 0 ) < 1 ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) || (int) ( $request['product_id'] ?? 0 ) < 1 ) {
 			throw new RuntimeException( 'The variation request action or product ID is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['variation_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a variation requires an exact variation_id.' );
+		if ( 'create' !== $action && (int) ( $request['variation_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a variation requires an exact variation_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['expected_state_token'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['expected_state_token'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a variation requires a valid expected_state_token.' );
 		}
 		if ( isset( $request['data'] ) && ( ! is_array( $request['data'] ) || ( [] !== $request['data'] && array_is_list( $request['data'] ) ) ) ) {
 			throw new RuntimeException( 'The variation data must be an object.' );
@@ -217,6 +253,18 @@ final class ProductVariation {
 				throw new RuntimeException( 'WooCommerce variation data failed readback verification.' );
 			}
 		}
+	}
+
+	private function token_for( \WC_Product_Variation $variation ): string {
+		return StateToken::issue( $this->token_state( $variation ) );
+	}
+
+	private function token_state( \WC_Product_Variation $variation ): array {
+		return [
+			'product_id'   => (int) $variation->get_parent_id(),
+			'variation_id' => (int) $variation->get_id(),
+			'data'         => $this->payload( $variation ),
+		];
 	}
 
 	private function payload( \WC_Product_Variation $variation ): array {

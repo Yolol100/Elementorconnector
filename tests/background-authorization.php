@@ -123,6 +123,7 @@ require_once $root . '/includes/Settings.php';
 require_once $root . '/includes/Sync/State.php';
 require_once $root . '/includes/Lifecycle/Hooks.php';
 require_once $root . '/includes/Sync/AutoApply.php';
+require_once $root . '/includes/Sync/ContentRequests.php';
 
 $GLOBALS['ejb_test_user'] = 42;
 $captured = Webactueel\ElementorJsonBridge\Settings::sanitize([
@@ -138,6 +139,13 @@ if (($captured['auto_apply_actor'] ?? 0) !== 42) {
     throw new RuntimeException('Enabling Automatic apply did not bind the current administrator actor.');
 }
 $GLOBALS['ejb_test_user'] = 0;
+
+if (Webactueel\ElementorJsonBridge\Sync\ContentRequests::should_process(0)) {
+    throw new RuntimeException('Repository-authored requests can run while automatic apply is disabled.');
+}
+if (!Webactueel\ElementorJsonBridge\Sync\ContentRequests::should_process(1)) {
+    throw new RuntimeException('Repository-authored requests are blocked while automatic apply is enabled.');
+}
 
 $manager = new EJB_Test_Manager();
 $auto = new Webactueel\ElementorJsonBridge\Sync\AutoApply($manager);

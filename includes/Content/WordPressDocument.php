@@ -6,6 +6,7 @@ use RuntimeException;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
+use Webactueel\ElementorJsonBridge\Support\StateToken;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -128,6 +129,35 @@ final class WordPressDocument {
 		}
 
 		return $this->validate_array( $payload, $post_id );
+	}
+
+	public function state_token( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof \WP_Post || ! $this->supports( $post_id ) ) {
+			throw new RuntimeException( 'The WordPress content item is not managed by the bridge.' );
+		}
+		return StateToken::issue(
+			[
+				'content'      => $this->payload( $post_id ),
+				'extended'     => PostState::read( $post_id ),
+				'modified_gmt' => (string) $post->post_modified_gmt,
+			]
+		);
+	}
+
+	public function assert_state_token( int $post_id, mixed $expected ): void {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof \WP_Post || ! $this->supports( $post_id ) ) {
+			throw new RuntimeException( 'The WordPress content item is not managed by the bridge.' );
+		}
+		StateToken::assert_matches(
+			$expected,
+			[
+				'content'      => $this->payload( $post_id ),
+				'extended'     => PostState::read( $post_id ),
+				'modified_gmt' => (string) $post->post_modified_gmt,
+			]
+		);
 	}
 
 	public function decode( string $json, int $post_id ): array {
@@ -344,15 +374,16 @@ final class WordPressDocument {
 			throw new RuntimeException( 'The WordPress content item cannot be indexed.' );
 		}
 		return [
-			'id'        => (int) $post->ID,
-			'post_type' => (string) $post->post_type,
-			'title'     => (string) $post->post_title,
-			'slug'      => (string) $post->post_name,
-			'status'    => (string) $post->post_status,
-			'path'      => $path,
-			'elementor' => $this->elementor->is_elementor_document( $post_id ),
-			'acf'       => function_exists( 'get_field_objects' ),
-			'yoast'     => class_exists( '\WPSEO_Meta' ),
+			'id'          => (int) $post->ID,
+			'post_type'   => (string) $post->post_type,
+			'title'       => (string) $post->post_title,
+			'slug'        => (string) $post->post_name,
+			'status'      => (string) $post->post_status,
+			'path'        => $path,
+			'state_token' => $this->state_token( $post_id ),
+			'elementor'   => $this->elementor->is_elementor_document( $post_id ),
+			'acf'         => function_exists( 'get_field_objects' ),
+			'yoast'       => class_exists( '\WPSEO_Meta' ),
 		];
 	}
 
@@ -440,23 +471,16 @@ final class WordPressDocument {
 		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'update_field' ) ) {
 			throw new RuntimeException( 'ACF content is present but Advanced Custom Fields is not active.' );
 		}
-		$current = $this->acf( $post_id );
-		foreach ( $acf as $name => $field ) {
-			$keys = is_array( $field ) ? array_keys( $field ) : [];
-			sort( $keys, SORT_STRING );
-			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys ) {
-				throw new RuntimeException( 'The ACF field set no longer matches this WordPress item.' );
-			}
-			if ( $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
-				throw new RuntimeException( 'An ACF field identity changed after export.' );
-			}
-		}
+		AcfFields::validate_post( $post_id, $acf, $this->acf( $post_id ) );
 	}
 
 	private function apply_acf( int $post_id, array $acf ): void {
-		foreach ( $acf as $field ) {
-			update_field( (string) $field['key'], $field['value'], $post_id );
+		$current = $this->acf( $post_id );
+		if ( [] === $acf && [] === $current ) {
+			return;
 		}
+		AcfFields::validate_post( $post_id, $acf, $current );
+		AcfFields::apply_authoritative( $post_id, $acf, $current );
 	}
 
 	private function yoast( int $post_id ): array {

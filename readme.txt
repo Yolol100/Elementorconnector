@@ -34,21 +34,23 @@ The default root is `site-data` and can contain:
 
 WooCommerce catalog fields use `manage-product` and `manage-product-variation` request files so product writes use WooCommerce CRUD and verified readback.
 
+For an existing post, product, variation or taxonomy term, first send that request type's `read` action. The returned `state_token` must be copied to `expected_state_token` for update/delete. A stale token is rejected before mutation.
+
 `abilities.json` records the registered external ability surface plus WordPress/ACF/Elementor/WooCommerce/Yoast version context. An ability appearing in source code is not treated as available unless the live target actually registers it.
 
 == Request operations ==
 
-`elementor-json-bridge/manage-post` supports create, update and delete for managed WordPress content. New content is always a draft. Delete requires `confirm_destructive=true`.
+`elementor-json-bridge/manage-post` supports create, read, update and delete for managed WordPress content. New content is always a draft. Read returns the current state plus `state_token`; update/delete require matching `expected_state_token`. Delete also requires `confirm_destructive=true`.
 
 When an explicit Elementor payload is supplied for a new item, the bridge creates the document through Elementor's document manager and saves it through Elementor's document API. It never directly writes `_elementor_data`.
 
-`elementor-json-bridge/manage-product` supports WooCommerce product create, update and delete. Product core/catalog fields are applied through `WC_Product` setters and `save()`. Supported current product-model fields include global product identifiers, low-stock amounts and product brand IDs when the installed WooCommerce version provides those methods. COGS remains feature-gated upstream and is not exposed as an unconditional generic write field.
+`elementor-json-bridge/manage-product` supports WooCommerce product create, read, update and delete. Read returns `state_token`; update/delete require matching `expected_state_token`. Product core/catalog fields are applied through `WC_Product` setters and `save()`. Supported current product-model fields include global product identifiers, low-stock amounts and product brand IDs when the installed WooCommerce version provides those methods. COGS remains feature-gated upstream and is not exposed as an unconditional generic write field.
 
 Product deletion follows WooCommerce semantics: confirmed deletion moves to Trash by default; permanent deletion additionally requires `force=true`.
 
-`elementor-json-bridge/manage-product-variation` supports variable-product variation create, update and confirmed permanent delete. Current stable identifier and low-stock fields are supported when the installed WooCommerce version exposes them.
+`elementor-json-bridge/manage-product-variation` supports variable-product variation create, read, update and confirmed permanent delete. Read returns `state_token`; update/delete require matching `expected_state_token`. Current stable identifier and low-stock fields are supported when the installed WooCommerce version exposes them.
 
-`elementor-json-bridge/manage-term` supports create/update/delete for WordPress/WooCommerce taxonomies with exact term IDs for update/delete. ACF and Yoast term data can be included where the installed plugin APIs support it.
+`elementor-json-bridge/manage-term` supports create/read/update/delete for WordPress/WooCommerce taxonomies with exact term IDs for existing terms. Read returns `state_token`; update/delete require matching `expected_state_token`. ACF and Yoast term data can be included where the installed plugin APIs support it. Authoritative ACF rollback removes values newly introduced by a request if a later step fails.
 
 `elementor-json-bridge/run-ability` executes only a constrained live-catalog ability. Core abilities are executable through this GitHub route only when read-only. Destructive abilities require explicit confirmation. ACF abilities require ACF AI support to be enabled on the target.
 
@@ -56,13 +58,14 @@ Product deletion follows WooCommerce semantics: confirmed deletion moves to Tras
 
 * The content repository must be private.
 * GitHub authentication uses Device Flow; access/refresh tokens are encrypted at rest.
-* The recorded background actor must still hold the bridge capability.
+* The recorded background actor must still hold the bridge capability, and repository-authored request execution follows the same `auto_apply` opt-in.
 * Request JSON is bounded and rejects unknown fields.
 * `request_id` values are fingerprinted; an ID cannot be reused for changed input.
-* A process lock prevents two request polls from executing the same unrecorded operation concurrently.
-* Direct update handlers validate desired state before writing and perform exact readback; failures attempt verified rollback.
+* A process lock prevents duplicate concurrent request polling; stale takeover and release use compare-and-swap/conditional deletion so an old worker cannot remove a newer lock.
+* Existing targets use site-scoped fresh-state tokens; update/delete fail before mutation when the target changed after the request was prepared.
+* Direct post update handlers create an integrity-checked durable snapshot before writing, including extended post state. Direct product, variation and term updates prevalidate, read back and verify rollback on failure.
 * Existing canonical content uses fresh conflict checks, integrity-checked snapshots, supported APIs, exact fingerprint readback and verified rollback.
-* ACF fields remain bound to their live field name/key/type identity.
+* ACF fields remain bound to their live field name/key/type identity, and failed first writes are removed during authoritative rollback.
 * Calculated Yoast analysis/indexable data is not bulk written as editable SEO metadata.
 * Elementor storage is never directly mutated.
 * WooCommerce catalog data is written through WooCommerce CRUD.
@@ -77,7 +80,7 @@ Runtime canaries cover:
 * WordPress 6.8.3 / PHP 8.1 / Elementor 4.2.4 / ACF 6.8.9.
 * WordPress 7.1 / PHP 8.3 / Elementor 4.2.4 / ACF 6.8.9 / Yoast SEO 28.4 / WooCommerce 11.0.1.
 
-The current runtime suite includes positive and negative scenarios for WordPress posts, ACF term fields, Elementor document creation, WooCommerce products, categories/brands, variable-product variations, deletion modes, rollback/readback and live Abilities discovery.
+The current runtime suite includes positive and negative scenarios for WordPress posts, fresh-state token rejection, ACF term first writes/rollback, Elementor document creation, WooCommerce products, categories/brands, variable-product variations, deletion modes, rollback/readback and live Abilities discovery.
 
 == Production gate ==
 
@@ -90,14 +93,16 @@ Authentication, processed request IDs and request-process lock state are always 
 == Changelog ==
 
 = 0.6.0 =
-* Add guarded create/update/delete requests for WordPress content, WooCommerce products, variations and taxonomy terms.
+* Add guarded create/read/update/delete requests for WordPress content, WooCommerce products, variations and taxonomy terms.
+* Require a fresh site-scoped state token for update/delete of existing request targets.
 * Create new Elementor documents through Elementor's official document manager when an Elementor payload is explicitly requested.
 * Add live WordPress Abilities discovery for safe Core, ACF, Yoast SEO and WooCommerce product capabilities.
 * Add ACF AI capability context and current integration version context to `abilities.json`.
 * Route WooCommerce product core/catalog writes through WooCommerce CRUD and align delete behavior with WooCommerce Trash/force semantics.
 * Add current stable WooCommerce global identifier, low-stock and product-brand fields; keep feature-gated COGS fail-closed.
-* Add prevalidation, exact readback and verified rollback to direct update operations.
-* Add a process lock around request polling to prevent duplicate concurrent execution windows.
+* Add prevalidation, exact readback, durable post snapshots and verified rollback to direct update operations.
+* Add authoritative ACF rollback for failed first writes.
+* Add compare-and-swap process locking around request polling to prevent stale workers from deleting newer lock ownership.
 * Expand current runtime CI to ACF 6.8.9, Yoast SEO 28.4 and WooCommerce 11.0.1 with positive and negative integration scenarios.
 
 = 0.5.0 =
