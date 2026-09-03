@@ -66,9 +66,9 @@ WooCommerce catalog fields are intentionally request-driven: use `manage-product
 
 ### WordPress content
 
-`elementor-json-bridge/manage-post`, version `1`
+`elementor-json-bridge/manage-post`, version `2`
 
-Actions: `create`, `update`, `delete`. New items are drafts. Update/delete require `base_hash`, calculated from the exact canonical content JSON used to author the request; stale hashes fail closed. Delete additionally requires `confirm_destructive=true`.
+Actions: `create`, `update`, `delete`. New items are drafts. Version 2 is a safety migration: pending version-1 `manage-post` files must be regenerated. Update/delete require `base_hash`, calculated from the exact canonical content JSON used to author the request; stale hashes fail closed. Delete additionally requires `confirm_destructive=true`. The `post` object accepts only fields present in the canonical content envelope; `author`, `date`, `password`, `format` and `sticky` are deliberately not request-mutable because they are outside that conflict/snapshot envelope.
 
 When a create request contains an `elementor` document payload, creation is routed through `Elementor\Plugin::$instance->documents->create()` and saved through the Elementor document API. A normal WordPress item is never silently converted into Elementor content.
 

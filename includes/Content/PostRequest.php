@@ -2,7 +2,6 @@
 
 namespace Webactueel\ElementorJsonBridge\Content;
 
-use DateTimeImmutable;
 use RuntimeException;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
@@ -13,7 +12,9 @@ defined( 'ABSPATH' ) || exit;
 
 final class PostRequest {
 	public const FORMAT  = 'elementor-json-bridge/manage-post';
-	public const VERSION = 1;
+	public const VERSION = 2;
+
+	private const CANONICAL_POST_FIELDS = [ 'title', 'slug', 'status', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ];
 
 	public function __construct(
 		private readonly WordPressDocument $content,
@@ -58,22 +59,18 @@ final class PostRequest {
 			return [ 'status' => 'deleted', 'post_id' => $id, 'snapshot_id' => $snapshot_id ];
 		}
 
-		$post            = is_array( $request['post'] ?? null ) ? $request['post'] : [];
-		$before_content  = $current_content;
-		$before_extended = $this->extended_state( $id );
-		$desired         = $this->desired_content( $id, $before_content, $post, $request, false );
-		$this->validate_extended_post_fields( $id, $post );
-		$snapshot_id = $this->snapshots()->create( $id, $before_content, 'before_request_update' );
+		$post           = is_array( $request['post'] ?? null ) ? $request['post'] : [];
+		$before_content = $current_content;
+		$snapshot_id   = $this->snapshots()->create( $id, $before_content, 'before_request_update' );
+		$desired       = $this->desired_content( $id, $before_content, $post, $request, false );
 
 		try {
 			$this->content->apply( $id, $desired );
-			$this->apply_extended_post_fields( $id, $post );
-			$this->verify_state( $id, $desired, $post );
+			$this->verify_state( $id, $desired );
 		} catch ( \Throwable $apply_error ) {
 			try {
 				$this->content->apply( $id, $before_content );
-				$this->apply_extended_post_fields( $id, $before_extended );
-				$this->verify_state( $id, $before_content, $before_extended );
+				$this->verify_state( $id, $before_content );
 			} catch ( \Throwable $rollback_error ) {
 				throw new RuntimeException( 'WordPress content update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
 			}
@@ -103,10 +100,8 @@ final class PostRequest {
 		try {
 			$current = $this->content->payload( $id );
 			$desired = $this->desired_content( $id, $current, $request_post, $request, true );
-			$this->validate_extended_post_fields( $id, $request_post );
 			$this->content->apply( $id, $desired );
-			$this->apply_extended_post_fields( $id, $request_post );
-			$this->verify_state( $id, $desired, $request_post );
+			$this->verify_state( $id, $desired );
 		} catch ( \Throwable $throwable ) {
 			wp_delete_post( $id, true );
 			throw $throwable;
@@ -138,10 +133,8 @@ final class PostRequest {
 			$current = $this->content->payload( $id );
 			$request['elementor'] = $elementor;
 			$desired = $this->desired_content( $id, $current, $request_post, $request, true );
-			$this->validate_extended_post_fields( $id, $request_post );
 			$this->content->apply( $id, $desired );
-			$this->apply_extended_post_fields( $id, $request_post );
-			$this->verify_state( $id, $desired, $request_post );
+			$this->verify_state( $id, $desired );
 		} catch ( \Throwable $throwable ) {
 			wp_delete_post( $id, true );
 			throw $throwable;
@@ -159,7 +152,7 @@ final class PostRequest {
 		if ( array_key_exists( 'elementor', $request ) ) {
 			$desired['elementor'] = $request['elementor'];
 		}
-		foreach ( [ 'title', 'slug', 'status', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image' ] as $field ) {
+		foreach ( self::CANONICAL_POST_FIELDS as $field ) {
 			if ( array_key_exists( $field, $post ) ) {
 				if ( 'slug' === $field ) {
 					if ( ! is_string( $post[ $field ] ) ) {
@@ -177,35 +170,11 @@ final class PostRequest {
 		return $this->content->validate_array( $desired, $id );
 	}
 
-	private function verify_state( int $id, array $expected_content, array $expected_extended ): void {
+	private function verify_state( int $id, array $expected_content ): void {
 		$readback = $this->content->payload( $id );
 		if ( ! hash_equals( CanonicalJson::hash( $expected_content ), CanonicalJson::hash( $readback ) ) ) {
 			throw new RuntimeException( 'WordPress content failed exact readback verification.' );
 		}
-		$current = $this->extended_state( $id );
-		foreach ( [ 'author', 'date', 'password', 'format', 'sticky' ] as $field ) {
-			if ( array_key_exists( $field, $expected_extended ) && ( $current[ $field ] ?? null ) !== $expected_extended[ $field ] ) {
-				throw new RuntimeException( 'A WordPress extended content field failed readback verification.' );
-			}
-		}
-	}
-
-	private function extended_state( int $id ): array {
-		$post = get_post( $id );
-		if ( ! $post instanceof \WP_Post ) {
-			throw new RuntimeException( 'The WordPress content item no longer exists.' );
-		}
-		$format = get_post_format( $id );
-		$state  = [
-			'author'   => (int) $post->post_author,
-			'date'     => (string) $post->post_date,
-			'password' => (string) $post->post_password,
-			'format'   => false === $format ? '' : (string) $format,
-		];
-		if ( 'post' === $post->post_type ) {
-			$state['sticky'] = is_sticky( $id );
-		}
-		return $state;
 	}
 
 	private function assert_base_hash( array $current, array $request ): void {
@@ -228,7 +197,7 @@ final class PostRequest {
 			throw new RuntimeException( 'The post request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
-			throw new RuntimeException( 'The post request format or version is invalid.' );
+			throw new RuntimeException( 'The post request format or version is invalid. Regenerate legacy version-1 manage-post requests as version 2.' );
 		}
 		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) ) {
 			throw new RuntimeException( 'The post request action is invalid.' );
@@ -245,66 +214,9 @@ final class PostRequest {
 		if ( isset( $request['post'] ) && ( ! is_array( $request['post'] ) || ( [] !== $request['post'] && array_is_list( $request['post'] ) ) ) ) {
 			throw new RuntimeException( 'The post request post field must be an object.' );
 		}
-	}
-
-	private function validate_extended_post_fields( int $id, array $post ): void {
-		$allowed = [ 'title', 'slug', 'status', 'content', 'excerpt', 'parent', 'menu_order', 'comment_status', 'ping_status', 'page_template', 'featured_image', 'author', 'date', 'password', 'format', 'sticky' ];
-		if ( array_diff( array_keys( $post ), $allowed ) ) {
-			throw new RuntimeException( 'The post request contains unsupported post fields.' );
-		}
-		if ( array_key_exists( 'author', $post ) ) {
-			if ( ! is_int( $post['author'] ) || ! get_user_by( 'id', $post['author'] ) ) {
-				throw new RuntimeException( 'The requested WordPress author is invalid.' );
-			}
-			$object = get_post_type_object( (string) get_post_type( $id ) );
-			if ( ! current_user_can( $object?->cap->edit_others_posts ?? 'edit_others_posts' ) ) {
-				throw new RuntimeException( 'You are not allowed to change this content author.' );
-			}
-		}
-		if ( array_key_exists( 'date', $post ) ) {
-			if ( ! is_string( $post['date'] ) ) {
-				throw new RuntimeException( 'The requested WordPress date is invalid.' );
-			}
-			$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $post['date'] );
-			if ( false === $date || $date->format( 'Y-m-d H:i:s' ) !== $post['date'] ) {
-				throw new RuntimeException( 'The requested WordPress date must use Y-m-d H:i:s.' );
-			}
-		}
-		if ( array_key_exists( 'password', $post ) && ! is_string( $post['password'] ) ) {
-			throw new RuntimeException( 'The requested post password is invalid.' );
-		}
-		if ( array_key_exists( 'format', $post ) && ( ! is_string( $post['format'] ) || ( '' !== $post['format'] && ! in_array( $post['format'], array_keys( get_post_format_strings() ), true ) ) ) ) {
-			throw new RuntimeException( 'The requested post format is invalid.' );
-		}
-		if ( array_key_exists( 'sticky', $post ) && ( 'post' !== get_post_type( $id ) || ! is_bool( $post['sticky'] ) ) ) {
-			throw new RuntimeException( 'Sticky can only be changed on normal posts.' );
-		}
-	}
-
-	private function apply_extended_post_fields( int $id, array $post ): void {
-		$this->validate_extended_post_fields( $id, $post );
-		$update = [ 'ID' => $id ];
-		if ( array_key_exists( 'author', $post ) ) {
-			$update['post_author'] = $post['author'];
-		}
-		if ( array_key_exists( 'date', $post ) ) {
-			$update['post_date']     = $post['date'];
-			$update['post_date_gmt'] = get_gmt_from_date( $post['date'] );
-		}
-		if ( array_key_exists( 'password', $post ) ) {
-			$update['post_password'] = $post['password'];
-		}
-		if ( count( $update ) > 1 ) {
-			$result = wp_update_post( wp_slash( $update ), true );
-			if ( is_wp_error( $result ) ) {
-				throw new RuntimeException( 'WordPress rejected the extended content update.' );
-			}
-		}
-		if ( array_key_exists( 'format', $post ) ) {
-			set_post_format( $id, '' === $post['format'] ? false : $post['format'] );
-		}
-		if ( array_key_exists( 'sticky', $post ) ) {
-			$post['sticky'] ? stick_post( $id ) : unstick_post( $id );
+		$post = is_array( $request['post'] ?? null ) ? $request['post'] : [];
+		if ( array_diff( array_keys( $post ), self::CANONICAL_POST_FIELDS ) ) {
+			throw new RuntimeException( 'manage-post version 2 accepts only canonical post fields. Author, date, password, format and sticky are outside the conflict/snapshot envelope and are not request-mutable.' );
 		}
 	}
 }

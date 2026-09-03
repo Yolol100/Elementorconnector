@@ -112,7 +112,7 @@ final class ContentRequests {
 				'Use manage-product requests for WooCommerce catalog fields so product writes use WooCommerce CRUD and exact readback.',
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
-				'For manage-post update/delete requests, copy base_hash from the exact canonical content JSON you read. WordPress rejects stale hashes before any mutation.',
+				'Use manage-post version 2. For update/delete, copy base_hash from the exact canonical content JSON you read; stale hashes fail closed. Version-1 manage-post requests must be regenerated.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
 				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',

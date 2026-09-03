@@ -120,7 +120,23 @@ try {
 		throw new RuntimeException( 'PostRequest did not create a draft page.' );
 	}
 
-	$before_title = get_the_title( $page_id );
+	$before_title = (string) get_post_field( 'post_title', $page_id, 'raw' );
+	$expect_runtime_exception(
+		static function () use ( $posts, $page_id, $post_base_hash ): void {
+			$posts->execute(
+				[
+					'format'     => PostRequest::FORMAT,
+					'version'    => 1,
+					'request_id' => 'runtime-post-legacy-v1',
+					'action'     => 'update',
+					'post_id'    => $page_id,
+					'base_hash'  => $post_base_hash( $page_id ),
+					'post'       => [ 'title' => 'Must Not Apply Legacy V1' ],
+				]
+			);
+		},
+		'PostRequest accepted legacy version 1 after the version-2 safety migration.'
+	);
 	$expect_runtime_exception(
 		static function () use ( $posts, $page_id, $post_base_hash ): void {
 			$posts->execute(
@@ -131,13 +147,13 @@ try {
 					'action'     => 'update',
 					'post_id'    => $page_id,
 					'base_hash'  => $post_base_hash( $page_id ),
-					'post'       => [ 'title' => 'Must Not Persist', 'author' => 999999999 ],
+					'post'       => [ 'title' => 'Must Not Persist', 'password' => 'not-request-mutable' ],
 				]
 			);
 		},
-		'PostRequest accepted an invalid author.'
+		'PostRequest accepted a non-canonical extended field.'
 	);
-	if ( get_the_title( $page_id ) !== $before_title ) {
+	if ( (string) get_post_field( 'post_title', $page_id, 'raw' ) !== $before_title ) {
 		throw new RuntimeException( 'PostRequest changed content before rejecting invalid extended data.' );
 	}
 
@@ -151,14 +167,13 @@ try {
 			'post_id'    => $page_id,
 			'base_hash'  => CanonicalJson::hash( $before_update_payload ),
 			'post'       => [
-				'title'    => 'EJB Request Page Updated',
-				'content'  => '<p>Request page after.</p>',
-				'password' => 'runtime-pass',
+				'title'   => 'EJB Request Page Updated',
+				'content' => '<p>Request page after.</p>',
 			],
 		]
 	);
 	$page = get_post( $page_id );
-	if ( ! $page instanceof WP_Post || 'EJB Request Page Updated' !== $page->post_title || 'runtime-pass' !== $page->post_password ) {
+	if ( ! $page instanceof WP_Post || 'EJB Request Page Updated' !== $page->post_title ) {
 		throw new RuntimeException( 'PostRequest update failed readback.' );
 	}
 	$snapshot_id = (int) ( $post_update_result['snapshot_id'] ?? 0 );
@@ -184,7 +199,7 @@ try {
 		},
 		'PostRequest accepted a stale base hash.'
 	);
-	if ( 'EJB Local Newer' !== get_the_title( $page_id ) ) {
+	if ( 'EJB Local Newer' !== (string) get_post_field( 'post_title', $page_id, 'raw' ) ) {
 		throw new RuntimeException( 'A stale PostRequest overwrote a newer local edit.' );
 	}
 
