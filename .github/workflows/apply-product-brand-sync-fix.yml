@@ -1,0 +1,40 @@
+name: Apply bounded product brand state fix
+
+on:
+  push:
+    branches:
+      - fix/ci-runtime-20260903
+    paths:
+      - .github/workflows/apply-product-brand-sync-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Synchronize WooCommerce and WordPress brand state
+        run: python3 scripts/apply-product-brand-sync-fix.py
+
+      - name: Validate changed PHP and patch hygiene
+        run: |
+          php -l includes/Content/ProductRequest.php
+          git diff --check
+
+      - name: Commit repaired source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No repair changes produced." >&2; exit 1; }
+          git commit -m "Keep WooCommerce brand state consistent"
+          git push origin HEAD
