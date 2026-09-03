@@ -42,7 +42,7 @@ jobs:
           )
           text = text.replace(
               "str_contains($abilities, 'public const VERSION = 2') && str_contains($abilities, \"true === ( $annotations['readonly'] ?? false )\")",
-              "str_contains($abilityBridge, 'public const VERSION = 2') && str_contains($abilityBridge, \"true === ( $annotations['readonly'] ?? false )\")",
+              "str_contains($abilityBridge, 'public const VERSION = 2') && str_contains($abilityBridge, \"true === ( \\$annotations['readonly'] ?? false )\")",
           )
           path.write_text(text, encoding='utf-8')
 
@@ -50,7 +50,7 @@ jobs:
           text = path.read_text(encoding='utf-8')
           text = text.replace(
               "$assert(str_contains($abilities, 'confirm_destructive=true'), 'Destructive Ability execution no longer requires explicit confirmation.');",
-              "$assert(str_contains($abilities, \"true === ( $annotations['readonly'] ?? false )\") && str_contains($abilities, 'Use guarded versioned CRUD requests'), 'Generic Ability execution is not restricted to explicitly read-only abilities.');",
+              "$assert(str_contains($abilities, \"true === ( \\$annotations['readonly'] ?? false )\") && str_contains($abilities, 'Use guarded versioned CRUD requests'), 'Generic Ability execution is not restricted to explicitly read-only abilities.');",
           )
           path.write_text(text, encoding='utf-8')
           PY
