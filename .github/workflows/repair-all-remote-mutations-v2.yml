@@ -21,6 +21,23 @@ jobs:
       - name: Apply v2 safety contracts
         run: python3 .github/repair_all_remote_mutations_v2_driver.py
 
+      - name: Normalize generated PHP namespace separators
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in (
+              'includes/Content/ProductRequest.php',
+              'includes/Content/TaxonomyTerm.php',
+              'includes/Content/ProductVariation.php',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace(r'\\Throwable', r'\Throwable')
+              text = text.replace(r'\\WC_', r'\WC_')
+              text = text.replace(r'\\WP_', r'\WP_')
+              path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Align static regression sources
         run: |
           python3 - <<'PY'
