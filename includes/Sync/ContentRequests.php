@@ -23,7 +23,7 @@ final class ContentRequests {
 	private const MAX_PER_RUN         = 5;
 	private const RETENTION           = 200;
 	private const MAX_REQUEST_BYTES   = 1000000;
-	private const TERMINAL_STATUSES   = [ 'created', 'updated', 'deleted', 'executed', 'error' ];
+	private const TERMINAL_STATUSES   = [ 'created', 'read', 'updated', 'deleted', 'executed', 'error' ];
 
 	public function __construct(
 		private readonly WordPressDocument $content,
@@ -40,7 +40,14 @@ final class ContentRequests {
 		add_action( 'ejb_poll_remote', [ $this, 'process' ], 5 );
 	}
 
+	public static function should_process( mixed $setting ): bool {
+		return 1 === (int) $setting;
+	}
+
 	public function process(): void {
+		if ( ! self::should_process( Settings::get( 'auto_apply', 0 ) ) ) {
+			return;
+		}
 		if ( ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
 			return;
 		}
@@ -88,7 +95,7 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 4,
+			'version'               => 5,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
 			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
@@ -109,14 +116,16 @@ final class ContentRequests {
 				'Use manage-product requests for WooCommerce catalog fields so product writes use WooCommerce CRUD and exact readback.',
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
+				'Read the current target immediately before update or delete and copy its state_token into expected_state_token. Stale tokens are rejected before mutation.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
-				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
-				'Create, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs.',
+				'Create, read, update or delete categories, tags and product categories through manage-term requests using exact term IDs for existing terms.',
+				'Create, read, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs for existing variations.',
 				'Product delete moves the product to trash by default. Permanent deletion additionally requires force=true.',
 				'Only abilities listed in abilities.json can be executed through run-ability requests; supported namespaces are core/*, acf/*, yoast-seo/* and WooCommerce product abilities.',
 				'Destructive term, product, variation or ability operations require confirm_destructive=true.',
-				'Only one request-processing poll may execute at a time; stale process locks expire after ten minutes.',
+				'Repository request processing follows the same auto_apply opt-in as automatic remote content application.',
+				'Only one request-processing poll may execute at a time; stale process locks are replaced with an atomic compare-and-swap.',
 			],
 		];
 		$encoded = CanonicalJson::encode( $manifest, true );
@@ -208,11 +217,8 @@ final class ContentRequests {
 		}
 		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
 		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
-		if ( is_array( $data ) && time() - (int) ( $data['created_at'] ?? time() ) > self::PROCESS_LOCK_TTL ) {
-			delete_option( self::PROCESS_LOCK_OPTION );
-			if ( add_option( self::PROCESS_LOCK_OPTION, $value, '', false ) ) {
-				return $token;
-			}
+		if ( is_string( $existing ) && is_array( $data ) && time() - (int) ( $data['created_at'] ?? time() ) > self::PROCESS_LOCK_TTL && $this->compare_and_swap_process_lock( $existing, $value ) ) {
+			return $token;
 		}
 		return '';
 	}
@@ -220,9 +226,41 @@ final class ContentRequests {
 	private function release_process_lock( string $token ): void {
 		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
 		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
-		if ( is_array( $data ) && hash_equals( (string) ( $data['token'] ?? '' ), $token ) ) {
-			delete_option( self::PROCESS_LOCK_OPTION );
+		if ( is_string( $existing ) && is_array( $data ) && hash_equals( (string) ( $data['token'] ?? '' ), $token ) ) {
+			$this->delete_process_lock_if_value( $existing );
 		}
+	}
+
+	private function compare_and_swap_process_lock( string $expected, string $replacement ): bool {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- WordPress Options has no atomic compare-and-swap primitive.
+		$updated = $wpdb->update(
+			$wpdb->options,
+			[ 'option_value' => $replacement ],
+			[ 'option_name' => self::PROCESS_LOCK_OPTION, 'option_value' => $expected ],
+			[ '%s' ],
+			[ '%s', '%s' ]
+		);
+		if ( 1 !== $updated ) {
+			return false;
+		}
+		wp_cache_delete( self::PROCESS_LOCK_OPTION, 'options' );
+		return true;
+	}
+
+	private function delete_process_lock_if_value( string $expected ): bool {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Conditional deletion prevents a stale releaser from deleting a newer lock.
+		$deleted = $wpdb->delete(
+			$wpdb->options,
+			[ 'option_name' => self::PROCESS_LOCK_OPTION, 'option_value' => $expected ],
+			[ '%s', '%s' ]
+		);
+		if ( 1 !== $deleted ) {
+			return false;
+		}
+		wp_cache_delete( self::PROCESS_LOCK_OPTION, 'options' );
+		return true;
 	}
 
 	private function execute_request( array $request ): array {
@@ -243,9 +281,10 @@ final class ContentRequests {
 
 	private function created_result( int $post_id ): array {
 		return [
-			'status'  => 'created',
-			'post_id' => $post_id,
-			'path'    => $post_id > 0 && $this->manager->is_enabled( $post_id ) ? $this->manager->path_for( $post_id ) : '',
+			'status'      => 'created',
+			'post_id'     => $post_id,
+			'path'        => $post_id > 0 && $this->manager->is_enabled( $post_id ) ? $this->manager->path_for( $post_id ) : '',
+			'state_token' => $post_id > 0 && $this->content->supports( $post_id ) ? $this->content->state_token( $post_id ) : '',
 		];
 	}
 
