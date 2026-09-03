@@ -7,6 +7,7 @@ use Webactueel\ElementorJsonBridge\Content\ProductVariation;
 use Webactueel\ElementorJsonBridge\Content\TaxonomyTerm;
 use Webactueel\ElementorJsonBridge\Content\WooCommerceProduct;
 use Webactueel\ElementorJsonBridge\Content\WooCommerceProductExtras;
+use Webactueel\ElementorJsonBridge\Backup\OperationSnapshots;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Content\WordPressDocument;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
@@ -54,6 +55,26 @@ $products   = new ProductRequest( $woo, $woo_extra, $content );
 $variations = new ProductVariation();
 $terms      = new TaxonomyTerm();
 $abilities  = new AbilityBridge();
+$operation_snapshots = new OperationSnapshots();
+$read_sequence = 0;
+$term_base_hash = static function ( string $taxonomy, int $term_id ) use ( $terms, &$read_sequence ): string {
+	++$read_sequence;
+	$result = $terms->execute( [ 'format' => TaxonomyTerm::FORMAT, 'version' => TaxonomyTerm::VERSION, 'request_id' => 'runtime-term-read-' . $read_sequence, 'action' => 'read', 'taxonomy' => $taxonomy, 'term_id' => $term_id ] );
+	return (string) ( $result['base_hash'] ?? '' );
+};
+$product_base_hash = static function ( int $product_id ) use ( $products, &$read_sequence ): string {
+	++$read_sequence;
+	$result = $products->execute( [ 'format' => ProductRequest::FORMAT, 'version' => ProductRequest::VERSION, 'request_id' => 'runtime-product-read-' . $read_sequence, 'action' => 'read', 'product_id' => $product_id ] );
+	return (string) ( $result['base_hash'] ?? '' );
+};
+$variation_base_hash = static function ( int $product_id, int $variation_id ) use ( $variations, &$read_sequence ): string {
+	++$read_sequence;
+	$result = $variations->execute( [ 'format' => ProductVariation::FORMAT, 'version' => ProductVariation::VERSION, 'request_id' => 'runtime-variation-read-' . $read_sequence, 'action' => 'read', 'product_id' => $product_id, 'variation_id' => $variation_id ] );
+	return (string) ( $result['base_hash'] ?? '' );
+};
+$product_state = static function ( int $product_id ) use ( $content, $woo, $woo_extra ): array {
+	return [ 'content' => $content->payload( $product_id ), 'woocommerce' => array_merge( $woo->payload( $product_id ), $woo_extra->payload( $product_id ) ) ];
+};
 
 $post_base_hash = static function ( int $post_id ) use ( $content ): string {
 	return CanonicalJson::hash( $content->payload( $post_id ) );
@@ -283,6 +304,7 @@ try {
 			'action'     => 'update',
 			'taxonomy'   => 'category',
 			'term_id'    => $term_id,
+			'base_hash'  => $term_base_hash( 'category', $term_id ),
 			'data'       => [
 				'name' => 'EJB Runtime Request Category Updated',
 				'acf'  => [
@@ -300,7 +322,7 @@ try {
 	}
 	$term_name_before_invalid = get_term( $term_id, 'category' )->name;
 	$expect_runtime_exception(
-		static function () use ( $terms, $term_id ): void {
+		static function () use ( $terms, $term_id, $term_base_hash ): void {
 			$terms->execute(
 				[
 					'format'     => TaxonomyTerm::FORMAT,
@@ -309,6 +331,7 @@ try {
 					'action'     => 'update',
 					'taxonomy'   => 'category',
 					'term_id'    => $term_id,
+					'base_hash'  => $term_base_hash( 'category', $term_id ),
 					'data'       => [
 						'name' => 'Must Not Persist',
 						'acf'  => [
@@ -343,7 +366,7 @@ try {
 
 	$product_title_before_invalid = $product->get_name();
 	$expect_runtime_exception(
-		static function () use ( $products, $product_id ): void {
+		static function () use ( $products, $product_id, $product_base_hash ): void {
 			$products->execute(
 				[
 					'format'     => ProductRequest::FORMAT,
@@ -351,6 +374,7 @@ try {
 					'request_id' => 'runtime-product-invalid-woo',
 					'action'     => 'update',
 					'product_id' => $product_id,
+					'base_hash'  => $product_base_hash( $product_id ),
 					'post'       => [ 'title' => 'Must Not Persist' ],
 					'woocommerce' => [ 'type' => 'simple', 'regular_price' => [ 'invalid' ] ],
 				]
@@ -384,21 +408,27 @@ try {
 	if ( $product_brand_id > 0 ) {
 		$product_update_woo['brand_ids'] = [ $product_brand_id ];
 	}
-	$products->execute(
+	$product_before_update = $product_state( $product_id );
+	$product_update_result = $products->execute(
 		[
 			'format'     => ProductRequest::FORMAT,
 			'version'    => ProductRequest::VERSION,
 			'request_id' => 'runtime-product-update',
 			'action'     => 'update',
 			'product_id' => $product_id,
-			'post'       => [ 'title' => 'EJB Runtime Product Updated', 'content' => '<p>Product after</p>', 'password' => 'product-pass' ],
+			'base_hash'  => CanonicalJson::hash( $product_before_update ),
+			'post'       => [ 'title' => 'EJB Runtime Product Updated', 'content' => '<p>Product after</p>' ],
 			'woocommerce' => $product_update_woo,
 			'taxonomies' => [ 'product_cat' => [ 'ejb-runtime-product-category' ] ],
 		]
 	);
 	$product = wc_get_product( $product_id );
-	if ( ! $product instanceof WC_Product || 'EJB Runtime Product Updated' !== $product->get_name() || '24.50' !== $product->get_regular_price() || 5.0 !== (float) $product->get_stock_quantity() || 1 !== (int) $product->get_low_stock_amount() || 'product-pass' !== get_post_field( 'post_password', $product_id, 'raw' ) ) {
+	if ( ! $product instanceof WC_Product || 'EJB Runtime Product Updated' !== $product->get_name() || '24.50' !== $product->get_regular_price() || 5.0 !== (float) $product->get_stock_quantity() || 1 !== (int) $product->get_low_stock_amount() ) {
 		throw new RuntimeException( 'ProductRequest update failed readback.' );
+	}
+	$product_snapshot_id = (int) ( $product_update_result['snapshot_id'] ?? 0 );
+	if ( $product_snapshot_id < 1 || ! hash_equals( CanonicalJson::hash( $product_before_update ), CanonicalJson::hash( $operation_snapshots->payload( $product_snapshot_id, 'woocommerce_product', 'product:' . $product_id ) ) ) ) {
+		throw new RuntimeException( 'ProductRequest did not preserve a valid durable pre-update snapshot.' );
 	}
 	if ( ! has_term( $product_cat_id, 'product_cat', $product_id ) ) {
 		throw new RuntimeException( 'ProductRequest taxonomy assignment failed readback.' );
@@ -408,7 +438,7 @@ try {
 	}
 
 	$expect_runtime_exception(
-		static function () use ( $products, $product_id ): void {
+		static function () use ( $products, $product_id, $product_base_hash ): void {
 			$products->execute(
 				[
 					'format'     => ProductRequest::FORMAT,
@@ -416,6 +446,7 @@ try {
 					'request_id' => 'runtime-product-delete-no-confirm',
 					'action'     => 'delete',
 					'product_id' => $product_id,
+					'base_hash'  => $product_base_hash( $product_id ),
 				]
 			);
 		},
@@ -428,6 +459,7 @@ try {
 			'request_id'          => 'runtime-product-trash',
 			'action'              => 'delete',
 			'product_id'          => $product_id,
+			'base_hash'           => $product_base_hash( $product_id ),
 			'confirm_destructive' => true,
 		]
 	);
@@ -447,6 +479,7 @@ try {
 			'request_id'          => 'runtime-product-force-delete',
 			'action'              => 'delete',
 			'product_id'          => $force_product_id,
+			'base_hash'           => $product_base_hash( $force_product_id ),
 			'confirm_destructive' => true,
 			'force'               => true,
 		]
@@ -488,6 +521,7 @@ try {
 			'action'       => 'update',
 			'product_id'   => $variable_id,
 			'variation_id' => $variation_id,
+			'base_hash'    => $variation_base_hash( $variable_id, $variation_id ),
 			'data'         => [ 'regular_price' => '12.00', 'stock_quantity' => 2 ],
 		]
 	);
@@ -497,7 +531,7 @@ try {
 	}
 	$variation_price_before_invalid = $variation->get_regular_price();
 	$expect_runtime_exception(
-		static function () use ( $variations, $variable_id, $variation_id ): void {
+		static function () use ( $variations, $variable_id, $variation_id, $variation_base_hash ): void {
 			$variations->execute(
 				[
 					'format'       => ProductVariation::FORMAT,
@@ -506,6 +540,7 @@ try {
 					'action'       => 'update',
 					'product_id'   => $variable_id,
 					'variation_id' => $variation_id,
+					'base_hash'    => $variation_base_hash( $variable_id, $variation_id ),
 					'data'         => [ 'regular_price' => '99.00', 'download_limit' => -1 ],
 				]
 			);
@@ -524,6 +559,7 @@ try {
 			'action'              => 'delete',
 			'product_id'          => $variable_id,
 			'variation_id'        => $variation_id,
+			'base_hash'           => $variation_base_hash( $variable_id, $variation_id ),
 			'confirm_destructive' => true,
 		]
 	);
@@ -533,9 +569,14 @@ try {
 
 	$catalog = $abilities->catalog();
 	$available = is_array( $catalog['abilities'] ?? null ) ? $catalog['abilities'] : [];
-	foreach ( [ 'core/get-site-info', 'acf/field-groups', 'acf/register-field-group', 'yoast-seo/get-seo-scores', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete', 'woocommerce/products-query' ] as $ability_name ) {
-		if ( ! isset( $available[ $ability_name ] ) ) {
-			throw new RuntimeException( 'Expected runtime ability is missing: ' . $ability_name );
+	foreach ( [ 'core/get-site-info', 'acf/field-groups' ] as $ability_name ) {
+		if ( ! isset( $available[ $ability_name ] ) || empty( $available[ $ability_name ]['executable'] ) ) {
+			throw new RuntimeException( 'Expected read-only runtime ability is missing or not executable: ' . $ability_name );
+		}
+	}
+	foreach ( [ 'acf/register-field-group', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete' ] as $ability_name ) {
+		if ( isset( $available[ $ability_name ] ) && ! empty( $available[ $ability_name ]['executable'] ) ) {
+			throw new RuntimeException( 'A mutable runtime ability was incorrectly exposed for GitHub execution: ' . $ability_name );
 		}
 	}
 	$core_result = $abilities->execute(
@@ -564,7 +605,7 @@ try {
 	}
 
 	$ability_product = new WC_Product_Simple();
-	$ability_product->set_name( 'EJB Ability Delete Product' );
+	$ability_product->set_name( 'EJB Ability Protected Product' );
 	$ability_product->set_status( 'draft' );
 	$ability_product_id = (int) $ability_product->save();
 	$cleanup_posts[] = $ability_product_id;
@@ -572,31 +613,19 @@ try {
 		static function () use ( $abilities, $ability_product_id ): void {
 			$abilities->execute(
 				[
-					'format'     => AbilityBridge::FORMAT,
-					'version'    => AbilityBridge::VERSION,
-					'request_id' => 'runtime-ability-delete-no-confirm',
-					'ability'    => 'woocommerce/product-delete',
-					'input'      => [ 'id' => $ability_product_id, 'force' => false ],
+					'format'              => AbilityBridge::FORMAT,
+					'version'             => AbilityBridge::VERSION,
+					'request_id'          => 'runtime-ability-mutation-rejected',
+					'ability'             => 'woocommerce/product-delete',
+					'input'               => [ 'id' => $ability_product_id, 'force' => false ],
+					'confirm_destructive' => true,
 				]
 			);
 		},
-		'AbilityBridge allowed a destructive WooCommerce ability without confirmation.'
+		'AbilityBridge executed a mutable WooCommerce ability through the read-only GitHub route.'
 	);
 	if ( ! get_post( $ability_product_id ) ) {
-		throw new RuntimeException( 'Rejected destructive ability unexpectedly removed the product.' );
-	}
-	$abilities->execute(
-		[
-			'format'              => AbilityBridge::FORMAT,
-			'version'             => AbilityBridge::VERSION,
-			'request_id'          => 'runtime-ability-delete-confirmed',
-			'ability'             => 'woocommerce/product-delete',
-			'input'               => [ 'id' => $ability_product_id, 'force' => false ],
-			'confirm_destructive' => true,
-		]
-	);
-	if ( 'trash' !== get_post_status( $ability_product_id ) ) {
-		throw new RuntimeException( 'Confirmed WooCommerce delete ability did not move the product to trash.' );
+		throw new RuntimeException( 'Rejected mutable ability unexpectedly removed the product.' );
 	}
 
 	echo wp_json_encode(

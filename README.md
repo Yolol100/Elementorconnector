@@ -74,9 +74,9 @@ When a create request contains an `elementor` document payload, creation is rout
 
 ### WooCommerce products
 
-`elementor-json-bridge/manage-product`, version `1`
+`elementor-json-bridge/manage-product`, version `2`
 
-Actions: `create`, `update`, `delete`.
+Actions: `create`, `read`, `update`, `delete`. Version 2 is a safety migration; pending version-1 product requests must be regenerated. `read` returns the current `base_hash`; update/delete require that hash and persist a durable typed pre-state snapshot before validation.
 
 Product updates use `WC_Product` setters and `save()`. Product deletion follows WooCommerce semantics:
 
@@ -87,19 +87,19 @@ The bridge validates the full desired WooCommerce state before applying the requ
 
 ### WooCommerce variations
 
-`elementor-json-bridge/manage-product-variation`, version `1`
+`elementor-json-bridge/manage-product-variation`, version `2`
 
-Create, update and permanent delete are supported against an exact variable-product parent. Destructive deletion requires confirmation. Variation writes use `WC_Product_Variation` and verified readback/rollback.
+Create, read, update and permanent delete are supported against an exact variable-product parent. Version 2 requires a fresh read-derived `base_hash` and durable pre-state snapshot for update/delete. Destructive deletion requires confirmation. Variation writes use `WC_Product_Variation` and verified readback/rollback.
 
 ### Taxonomy terms
 
-`elementor-json-bridge/manage-term`, version `1`
+`elementor-json-bridge/manage-term`, version `2`
 
-Create, update and delete terms using WordPress taxonomy APIs. Term ACF and Yoast data are supported where the relevant plugin APIs are active. A late extension failure cannot silently leave a partially renamed/updated term.
+Create, read, update and delete terms using WordPress taxonomy APIs. Version 2 requires a fresh read-derived `base_hash` and durable pre-state snapshot for update/delete. Term ACF and Yoast data are supported where the relevant plugin APIs are active. A late extension failure cannot silently leave a partially renamed/updated term.
 
 ### WordPress Abilities
 
-`elementor-json-bridge/run-ability`, version `1`
+`elementor-json-bridge/run-ability`, version `2`
 
 The bridge does not hardcode a promise that every plugin ability exists. `abilities.json` is generated from the live target and currently considers these namespaces/capabilities:
 
@@ -108,7 +108,7 @@ The bridge does not hardcode a promise that every plugin ability exists. `abilit
 - `yoast-seo/*`,
 - WooCommerce product abilities (`woocommerce/product-*` and `woocommerce/products-*`).
 
-Each ability remains subject to its own WordPress permission callback and input/output schema. Abilities marked destructive require `confirm_destructive=true`.
+Each ability remains subject to its own WordPress permission callback and input/output schema. The generic GitHub ability route executes only abilities explicitly annotated read-only; mutable abilities must use guarded versioned CRUD adapters that can provide conflict checks, snapshots, readback and rollback.
 
 ## Safety model
 

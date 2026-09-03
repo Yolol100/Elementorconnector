@@ -11,6 +11,7 @@ $plugin = file_get_contents($root . '/includes/Plugin.php');
 $terms = file_get_contents($root . '/includes/Content/TaxonomyTerm.php');
 $requests = file_get_contents($root . '/includes/Sync/ContentRequests.php');
 $abilities = file_get_contents($root . '/includes/Sync/WordPressAbilities.php');
+$abilityBridge = file_get_contents($root . '/includes/Content/AbilityBridge.php');
 $uninstall = file_get_contents($root . '/uninstall.php');
 $wpEnv = file_get_contents($root . '/.wp-env.json');
 $ci = file_get_contents($root . '/.github/workflows/ci.yml');
@@ -21,7 +22,7 @@ $assert = static function (bool $condition, string $message): void {
     }
 };
 
-foreach ([$posts, $products, $variations, $productExtras, $plugin, $terms, $requests, $abilities, $uninstall, $wpEnv, $ci] as $source) {
+foreach ([$posts, $products, $variations, $productExtras, $plugin, $terms, $requests, $abilities, $abilityBridge, $uninstall, $wpEnv, $ci] as $source) {
     $assert(is_string($source), 'A request-safety source file could not be read.');
 }
 
@@ -31,6 +32,10 @@ $assert(str_contains($products, 'rollback could not be verified') && str_contain
 $assert(str_contains($productExtras, 'global_unique_id') && str_contains($productExtras, 'low_stock_amount') && str_contains($productExtras, 'brand_ids') && str_contains($productExtras, 'set_global_unique_id') && str_contains($productExtras, 'set_brand_ids'), 'Current WooCommerce product-model extras are not bridged.');
 $assert(str_contains($products, 'WooCommerceProductExtras') && str_contains($products, 'woo_payload(') && str_contains($products, 'apply_woo('), 'Product requests do not merge current WooCommerce product-model extras.');
 $assert(str_contains($products, 'align_product_brand_taxonomy(') && str_contains($products, "\$content['taxonomies']['product_brand'] = \$slugs"), 'WooCommerce brand_ids are not aligned with the canonical product_brand taxonomy envelope.');
+$assert(str_contains($products, 'public const VERSION = 2') && str_contains($products, "'base_hash'") && str_contains($products, "'read' === $action") && str_contains($products, 'OperationSnapshots'), 'Product request v2 conflict/snapshot handshake is incomplete.');
+$assert(str_contains($terms, 'public const VERSION = 2') && str_contains($terms, "'base_hash'") && str_contains($terms, 'OperationSnapshots'), 'Taxonomy request v2 conflict/snapshot handshake is incomplete.');
+$assert(str_contains($variations, 'public const VERSION = 2') && str_contains($variations, "'base_hash'") && str_contains($variations, 'OperationSnapshots'), 'Variation request v2 conflict/snapshot handshake is incomplete.');
+$assert(str_contains($abilityBridge, 'public const VERSION = 2') && str_contains($abilityBridge, "true === ( \$annotations['readonly'] ?? false )"), 'Ability bridge is not fail-closed to explicitly read-only abilities.');
 $assert(str_contains($plugin, 'new WooCommerceProductExtras()') && str_contains($plugin, 'new ProductRequest( $woocommerce, $woocommerce_extra, $content )'), 'Plugin bootstrap does not inject current WooCommerce product-model extras.');
 $assert(str_contains($terms, 'rollback could not be verified') && str_contains($terms, 'assert_requested_state'), 'Taxonomy request rollback/readback verification is missing.');
 $assert(str_contains($variations, 'rollback could not be verified') && str_contains($variations, 'assert_requested_state'), 'Variation request rollback/readback verification is missing.');

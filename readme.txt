@@ -44,15 +44,15 @@ The version-2 `post` object accepts only fields present in the canonical conflic
 
 When an explicit Elementor payload is supplied for a new item, the bridge creates the document through Elementor's document manager and saves it through Elementor's document API. It never directly writes `_elementor_data`.
 
-`elementor-json-bridge/manage-product` supports WooCommerce product create, update and delete. Product core/catalog fields are applied through `WC_Product` setters and `save()`. Supported current product-model fields include global product identifiers, low-stock amounts and product brand IDs when the installed WooCommerce version provides those methods. COGS remains feature-gated upstream and is not exposed as an unconditional generic write field.
+`elementor-json-bridge/manage-product` version 2 supports WooCommerce product create, read, update and delete. Read returns the current `base_hash`; update/delete require that exact hash and create a durable typed snapshot before validation. Pending version-1 requests must be regenerated. Product core/catalog fields are applied through `WC_Product` setters and `save()`. Supported current product-model fields include global product identifiers, low-stock amounts and product brand IDs when the installed WooCommerce version provides those methods. COGS remains feature-gated upstream and is not exposed as an unconditional generic write field.
 
 Product deletion follows WooCommerce semantics: confirmed deletion moves to Trash by default; permanent deletion additionally requires `force=true`.
 
-`elementor-json-bridge/manage-product-variation` supports variable-product variation create, update and confirmed permanent delete. Current stable identifier and low-stock fields are supported when the installed WooCommerce version exposes them.
+`elementor-json-bridge/manage-product-variation` version 2 supports variable-product variation create, read, update and confirmed permanent delete. Update/delete require the `base_hash` from a fresh read result and create a durable typed snapshot before validation. Pending version-1 requests must be regenerated. Current stable identifier and low-stock fields are supported when the installed WooCommerce version exposes them.
 
-`elementor-json-bridge/manage-term` supports create/update/delete for WordPress/WooCommerce taxonomies with exact term IDs for update/delete. ACF and Yoast term data can be included where the installed plugin APIs support it.
+`elementor-json-bridge/manage-term` version 2 supports create/read/update/delete for WordPress/WooCommerce taxonomies with exact term IDs outside create. Update/delete require the `base_hash` from a fresh read result and create a durable typed snapshot before validation. Pending version-1 requests must be regenerated. ACF and Yoast term data can be included where the installed plugin APIs support it.
 
-`elementor-json-bridge/run-ability` executes only a constrained live-catalog ability. Core abilities are executable through this GitHub route only when read-only. Destructive abilities require explicit confirmation. ACF abilities require ACF AI support to be enabled on the target.
+`elementor-json-bridge/run-ability` version 2 executes only a constrained live-catalog ability explicitly annotated read-only. Mutable abilities remain discoverable context but cannot execute through this generic GitHub route; mutations use guarded versioned CRUD requests instead. Pending version-1 ability requests must be regenerated. Core abilities are executable through this GitHub route only when read-only. Destructive abilities require explicit confirmation. ACF abilities require ACF AI support to be enabled on the target.
 
 == Safety ==
 
@@ -95,6 +95,8 @@ Authentication, processed request IDs and request-process lock state are always 
 = 0.6.0 =
 * Add guarded create/update/delete requests for WordPress content, WooCommerce products, variations and taxonomy terms.
 * Version `manage-post` as contract version 2 for mandatory stale-request protection; version-1 pending request files must be regenerated.
+* Version product, taxonomy-term and variation mutation contracts to version 2 with read-derived base hashes and durable typed snapshots before validation.
+* Version the generic ability route to version 2 and execute only abilities explicitly annotated read-only; mutable abilities use guarded CRUD adapters.
 * Restrict `manage-post` version 2 to the canonical conflict/snapshot envelope and create durable snapshots before validation for update/delete operations.
 * Create new Elementor documents through Elementor's official document manager when an Elementor payload is explicitly requested.
 * Add live WordPress Abilities discovery for safe Core, ACF, Yoast SEO and WooCommerce product capabilities.

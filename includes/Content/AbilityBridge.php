@@ -9,7 +9,7 @@ final class AbilityBridge {
 	private const MAX_OUTPUT_BYTES = 1000000;
 
 	public const FORMAT  = 'elementor-json-bridge/run-ability';
-	public const VERSION = 1;
+	public const VERSION = 2;
 
 	private const PREFIXES = [ 'core/', 'acf/', 'yoast-seo/', 'woocommerce/product-', 'woocommerce/products-' ];
 
@@ -54,10 +54,7 @@ final class AbilityBridge {
 		}
 		$descriptor = $this->descriptor( $name, $ability );
 		if ( ! $descriptor['executable'] ) {
-			throw new RuntimeException( 'This ability is catalogued for context but is not executable through the GitHub bridge.' );
-		}
-		if ( ! empty( $descriptor['annotations']['destructive'] ) && true !== ( $request['confirm_destructive'] ?? false ) ) {
-			throw new RuntimeException( 'This ability is marked destructive and requires confirm_destructive=true.' );
+			throw new RuntimeException( 'Only abilities explicitly annotated readonly are executable through the GitHub bridge. Use guarded versioned CRUD requests for mutations.' );
 		}
 		$input = $request['input'] ?? null;
 		try {
@@ -111,7 +108,7 @@ final class AbilityBridge {
 		$annotations = is_array( $meta ) && is_array( $meta['annotations'] ?? null ) ? $meta['annotations'] : [];
 		return [
 			'name'          => $name,
-			'executable'    => ! str_starts_with( $name, 'core/' ) || true === ( $annotations['readonly'] ?? false ),
+			'executable'    => true === ( $annotations['readonly'] ?? false ),
 			'label'         => method_exists( $ability, 'get_label' ) ? (string) $ability->get_label() : $name,
 			'description'   => method_exists( $ability, 'get_description' ) ? (string) $ability->get_description() : '',
 			'category'      => method_exists( $ability, 'get_category' ) ? (string) $ability->get_category() : '',

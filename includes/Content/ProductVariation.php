@@ -3,13 +3,14 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Backup\OperationSnapshots;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
 final class ProductVariation {
 	public const FORMAT  = 'elementor-json-bridge/manage-product-variation';
-	public const VERSION = 1;
+	public const VERSION = 2;
 
 	private const BOOLEAN_FIELDS = [ 'enabled', 'virtual', 'downloadable', 'manage_stock' ];
 	private const STRING_FIELDS  = [ 'sku', 'regular_price', 'sale_price', 'date_on_sale_from', 'date_on_sale_to', 'stock_status', 'backorders', 'tax_class', 'weight', 'length', 'width', 'height', 'description' ];
@@ -43,7 +44,7 @@ final class ProductVariation {
 				}
 				throw $throwable;
 			}
-			return [ 'status' => 'created', 'product_id' => $product_id, 'variation_id' => $id, 'data' => $data ];
+			return $this->result( 'created', $product_id, $id, $data );
 		}
 
 		$variation_id = (int) ( $request['variation_id'] ?? 0 );
@@ -54,19 +55,27 @@ final class ProductVariation {
 		if ( ! current_user_can( 'edit_post', $variation_id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WooCommerce variation.' );
 		}
+		$before = $this->payload( $variation );
+		if ( 'read' === $action ) {
+			return $this->result( 'read', $product_id, $variation_id, $before );
+		}
+		$this->assert_base_hash( $before, $request );
+		$snapshot_id = $this->operation_snapshots()->create( 'product_variation', $product_id . ':' . $variation_id, $before, 'before_variation_' . $action );
 
 		if ( 'delete' === $action ) {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting a WooCommerce variation requires confirm_destructive=true.' );
 			}
+			if ( ! current_user_can( 'delete_post', $variation_id ) ) {
+				throw new RuntimeException( 'You are not allowed to delete this WooCommerce variation.' );
+			}
 			$variation->delete( true );
 			if ( null !== get_post( $variation_id ) ) {
 				throw new RuntimeException( 'WooCommerce variation deletion failed readback verification.' );
 			}
-			return [ 'status' => 'deleted', 'product_id' => $product_id, 'variation_id' => $variation_id ];
+			return [ 'status' => 'deleted', 'product_id' => $product_id, 'variation_id' => $variation_id, 'snapshot_id' => $snapshot_id ];
 		}
 
-		$before = $this->payload( $variation );
 		try {
 			$this->apply_data( $variation, (array) ( $request['data'] ?? [] ) );
 			$variation->save();
@@ -74,40 +83,68 @@ final class ProductVariation {
 			$this->assert_requested_state( $data, (array) ( $request['data'] ?? [] ) );
 		} catch ( \Throwable $apply_error ) {
 			try {
-				$this->apply_data( $variation, $before );
+				$rollback = $this->operation_snapshots()->payload( $snapshot_id, 'product_variation', $product_id . ':' . $variation_id );
+				$this->apply_data( $variation, $rollback );
 				$variation->save();
-				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $variation ) ) ) ) {
+				if ( ! hash_equals( CanonicalJson::hash( $rollback ), CanonicalJson::hash( $this->payload( $variation ) ) ) ) {
 					throw new RuntimeException( 'WooCommerce variation rollback failed exact readback verification.' );
 				}
 			} catch ( \Throwable $rollback_error ) {
 				throw new RuntimeException( 'WooCommerce variation update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
 			}
-			throw new RuntimeException( 'WooCommerce variation update failed. The previous variation state was restored.', 0, $apply_error );
+			throw new RuntimeException( 'WooCommerce variation update failed. The durable previous variation state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'product_id' => $product_id, 'variation_id' => $variation_id, 'data' => $data ];
+		$result = $this->result( 'updated', $product_id, $variation_id, $data );
+		$result['snapshot_id'] = $snapshot_id;
+		return $result;
+	}
+
+	private function result( string $status, int $product_id, int $variation_id, array $data ): array {
+		return [ 'status' => $status, 'product_id' => $product_id, 'variation_id' => $variation_id, 'base_hash' => CanonicalJson::hash( $data ), 'data' => $data ];
+	}
+
+	private function assert_base_hash( array $state, array $request ): void {
+		$base_hash = (string) ( $request['base_hash'] ?? '' );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/D', $base_hash ) ) {
+			throw new RuntimeException( 'Updating or deleting a variation requires a valid base_hash.' );
+		}
+		if ( ! hash_equals( $base_hash, CanonicalJson::hash( $state ) ) ) {
+			throw new RuntimeException( 'The WooCommerce variation changed after this request was authored. Read it again and create a new request.' );
+		}
+	}
+
+	private function operation_snapshots(): OperationSnapshots {
+		return new OperationSnapshots();
 	}
 
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'variation_id', 'data', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'variation_id', 'data', 'base_hash', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The variation request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
-			throw new RuntimeException( 'The variation request format or version is invalid.' );
+			throw new RuntimeException( 'The variation request format or version is invalid. Regenerate legacy version-1 manage-product-variation requests as version 2.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) || (int) ( $request['product_id'] ?? 0 ) < 1 ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) || (int) ( $request['product_id'] ?? 0 ) < 1 ) {
 			throw new RuntimeException( 'The variation request action or product ID is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['variation_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a variation requires an exact variation_id.' );
+		if ( 'create' !== $action && (int) ( $request['variation_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a variation requires an exact variation_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['base_hash'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['base_hash'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a variation requires a valid base_hash from a version-2 read result.' );
 		}
 		if ( isset( $request['data'] ) && ( ! is_array( $request['data'] ) || ( [] !== $request['data'] && array_is_list( $request['data'] ) ) ) ) {
 			throw new RuntimeException( 'The variation data must be an object.' );
 		}
+		if ( 'read' === $action && ( array_key_exists( 'data', $request ) || array_key_exists( 'confirm_destructive', $request ) ) ) {
+			throw new RuntimeException( 'A variation read request cannot contain mutation fields.' );
+		}
 	}
 
 	private function parent( int $product_id ): \WC_Product_Variable {
-		if ( ! function_exists( 'wc_get_product' ) || ! class_exists( '\\WC_Product_Variable' ) ) {
+		if ( ! function_exists( 'wc_get_product' ) || ! class_exists( '\WC_Product_Variable' ) ) {
 			throw new RuntimeException( 'WooCommerce is not active.' );
 		}
 		$product = wc_get_product( $product_id );

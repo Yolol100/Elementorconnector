@@ -3,13 +3,14 @@
 namespace Webactueel\ElementorJsonBridge\Content;
 
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Backup\OperationSnapshots;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
 final class TaxonomyTerm {
 	public const FORMAT  = 'elementor-json-bridge/manage-term';
-	public const VERSION = 1;
+	public const VERSION = 2;
 
 	public function execute( array $request ): array {
 		$this->validate_request( $request );
@@ -43,7 +44,7 @@ final class TaxonomyTerm {
 				wp_delete_term( $term_id, $taxonomy );
 				throw $throwable;
 			}
-			return [ 'status' => 'created', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
+			return $this->result( 'created', $taxonomy, $term_id, $readback );
 		}
 
 		$term_id = (int) ( $request['term_id'] ?? 0 );
@@ -51,7 +52,14 @@ final class TaxonomyTerm {
 		if ( ! $term instanceof \WP_Term ) {
 			throw new RuntimeException( 'The requested taxonomy term does not exist.' );
 		}
-
+		$before = $this->payload( $term_id, $taxonomy );
+		if ( 'read' === $action ) {
+			if ( ! current_user_can( $object->cap->edit_terms ) ) {
+				throw new RuntimeException( 'You are not allowed to read managed term state in this taxonomy.' );
+			}
+			return $this->result( 'read', $taxonomy, $term_id, $before );
+		}
+		$this->assert_base_hash( $before, $request );
 		if ( 'delete' === $action ) {
 			if ( ! current_user_can( $object->cap->delete_terms ) ) {
 				throw new RuntimeException( 'You are not allowed to delete terms in this taxonomy.' );
@@ -59,26 +67,27 @@ final class TaxonomyTerm {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting a taxonomy term requires confirm_destructive=true.' );
 			}
+			$snapshot_id = $this->operation_snapshots()->create( 'taxonomy_term', $taxonomy . ':' . $term_id, $before, 'before_term_delete' );
 			$result = wp_delete_term( $term_id, $taxonomy );
 			if ( true !== $result || get_term( $term_id, $taxonomy ) instanceof \WP_Term ) {
 				throw new RuntimeException( 'WordPress could not verify deletion of the requested taxonomy term.' );
 			}
-			return [ 'status' => 'deleted', 'taxonomy' => $taxonomy, 'term_id' => $term_id ];
+			return [ 'status' => 'deleted', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'snapshot_id' => $snapshot_id ];
 		}
 
 		if ( ! current_user_can( $object->cap->edit_terms ) ) {
 			throw new RuntimeException( 'You are not allowed to edit terms in this taxonomy.' );
 		}
-		$before = $this->payload( $term_id, $taxonomy );
-		$this->validate_extensions( $term_id, $taxonomy, $data );
-		$core = $this->core_args( $data, false );
-		if ( isset( $data['name'] ) ) {
-			if ( ! is_string( $data['name'] ) || '' === trim( $data['name'] ) ) {
-				throw new RuntimeException( 'A taxonomy term name cannot be empty.' );
-			}
-			$core['name'] = $data['name'];
-		}
+		$snapshot_id = $this->operation_snapshots()->create( 'taxonomy_term', $taxonomy . ':' . $term_id, $before, 'before_term_update' );
 		try {
+			$this->validate_extensions( $term_id, $taxonomy, $data );
+			$core = $this->core_args( $data, false );
+			if ( isset( $data['name'] ) ) {
+				if ( ! is_string( $data['name'] ) || '' === trim( $data['name'] ) ) {
+					throw new RuntimeException( 'A taxonomy term name cannot be empty.' );
+				}
+				$core['name'] = $data['name'];
+			}
 			if ( $core ) {
 				$result = wp_update_term( $term_id, $taxonomy, $core );
 				if ( is_wp_error( $result ) ) {
@@ -90,30 +99,20 @@ final class TaxonomyTerm {
 			$this->assert_requested_state( $readback, $data );
 		} catch ( \Throwable $apply_error ) {
 			try {
-				$restored = wp_update_term(
-					$term_id,
-					$taxonomy,
-					[
-						'name'        => $before['name'],
-						'slug'        => $before['slug'],
-						'description' => $before['description'],
-						'parent'      => $before['parent'],
-					]
-				);
-				if ( is_wp_error( $restored ) ) {
-					throw new RuntimeException( 'WordPress rejected taxonomy rollback.' );
-				}
-				$this->apply_acf( $term_id, $taxonomy, $before['acf'] );
-				$this->apply_yoast( $term_id, $taxonomy, $before['yoast'] );
-				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $term_id, $taxonomy ) ) ) ) {
-					throw new RuntimeException( 'Taxonomy rollback failed exact readback verification.' );
-				}
+				$rollback = $this->operation_snapshots()->payload( $snapshot_id, 'taxonomy_term', $taxonomy . ':' . $term_id );
+				$this->restore_state( $term_id, $taxonomy, $rollback );
 			} catch ( \Throwable $rollback_error ) {
 				throw new RuntimeException( 'Taxonomy update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
 			}
-			throw new RuntimeException( 'Taxonomy update failed. The previous term state was restored.', 0, $apply_error );
+			throw new RuntimeException( 'Taxonomy update failed. The durable previous term state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'data' => $readback ];
+		$result = $this->result( 'updated', $taxonomy, $term_id, $readback );
+		$result['snapshot_id'] = $snapshot_id;
+		return $result;
+	}
+
+	private function result( string $status, string $taxonomy, int $term_id, array $data ): array {
+		return [ 'status' => $status, 'taxonomy' => $taxonomy, 'term_id' => $term_id, 'base_hash' => CanonicalJson::hash( $data ), 'data' => $data ];
 	}
 
 	public function inventory(): array {
@@ -148,22 +147,64 @@ final class TaxonomyTerm {
 		return $result;
 	}
 
+	private function assert_base_hash( array $state, array $request ): void {
+		$base_hash = (string) ( $request['base_hash'] ?? '' );
+		if ( 1 !== preg_match( '/^[a-f0-9]{64}$/D', $base_hash ) ) {
+			throw new RuntimeException( 'Updating or deleting a taxonomy term requires a valid base_hash.' );
+		}
+		if ( ! hash_equals( $base_hash, CanonicalJson::hash( $state ) ) ) {
+			throw new RuntimeException( 'The taxonomy term changed after this request was authored. Read the term again and create a new request.' );
+		}
+	}
+
+	private function restore_state( int $term_id, string $taxonomy, array $state ): void {
+		$result = wp_update_term(
+			$term_id,
+			$taxonomy,
+			[
+				'name'        => $state['name'],
+				'slug'        => $state['slug'],
+				'description' => $state['description'],
+				'parent'      => $state['parent'],
+			]
+		);
+		if ( is_wp_error( $result ) ) {
+			throw new RuntimeException( 'WordPress rejected taxonomy rollback.' );
+		}
+		$this->apply_acf( $term_id, $taxonomy, $state['acf'] );
+		$this->apply_yoast( $term_id, $taxonomy, $state['yoast'] );
+		if ( ! hash_equals( CanonicalJson::hash( $state ), CanonicalJson::hash( $this->payload( $term_id, $taxonomy ) ) ) ) {
+			throw new RuntimeException( 'Taxonomy rollback failed exact readback verification.' );
+		}
+	}
+
+	private function operation_snapshots(): OperationSnapshots {
+		return new OperationSnapshots();
+	}
+
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'taxonomy', 'term_id', 'data', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'taxonomy', 'term_id', 'data', 'base_hash', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The taxonomy term request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
-			throw new RuntimeException( 'The taxonomy term request format or version is invalid.' );
+			throw new RuntimeException( 'The taxonomy term request format or version is invalid. Regenerate legacy version-1 manage-term requests as version 2.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) || '' === sanitize_key( (string) ( $request['taxonomy'] ?? '' ) ) ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) || '' === sanitize_key( (string) ( $request['taxonomy'] ?? '' ) ) ) {
 			throw new RuntimeException( 'The taxonomy term request action or taxonomy is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['term_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a term requires an exact term_id.' );
+		if ( 'create' !== $action && (int) ( $request['term_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a term requires an exact term_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['base_hash'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['base_hash'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a term requires a valid base_hash from a version-2 read result.' );
 		}
 		if ( isset( $request['data'] ) && ( ! is_array( $request['data'] ) || ( [] !== $request['data'] && array_is_list( $request['data'] ) ) ) ) {
 			throw new RuntimeException( 'Taxonomy term data must be an object.' );
+		}
+		if ( 'read' === $action && ( array_key_exists( 'data', $request ) || array_key_exists( 'confirm_destructive', $request ) ) ) {
+			throw new RuntimeException( 'A taxonomy term read request cannot contain mutation fields.' );
 		}
 		$data = is_array( $request['data'] ?? null ) ? $request['data'] : [];
 		if ( array_diff( array_keys( $data ), [ 'name', 'slug', 'description', 'parent', 'acf', 'yoast' ] ) ) {

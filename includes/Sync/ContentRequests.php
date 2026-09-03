@@ -23,7 +23,7 @@ final class ContentRequests {
 	private const MAX_PER_RUN         = 5;
 	private const RETENTION           = 200;
 	private const MAX_REQUEST_BYTES   = 1000000;
-	private const TERMINAL_STATUSES   = [ 'created', 'updated', 'deleted', 'executed', 'error' ];
+	private const TERMINAL_STATUSES   = [ 'created', 'read', 'updated', 'deleted', 'executed', 'error' ];
 
 	public function __construct(
 		private readonly WordPressDocument $content,
@@ -91,7 +91,7 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 5,
+			'version'               => 6,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
 			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
@@ -115,11 +115,12 @@ final class ContentRequests {
 				'Use manage-post version 2. For update/delete, copy base_hash from the exact canonical content JSON you read; stale hashes fail closed. Version-1 manage-post requests must be regenerated.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
-				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
-				'Create, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs.',
+				'Use version-2 read requests to obtain the current base_hash before updating/deleting products, taxonomy terms or product variations; stale hashes fail closed and the pre-state is snapshotted durably.',
+				'Create, read, update or delete categories, tags and product categories through manage-term version 2 using exact term IDs outside create.',
+				'Create, read, update or delete variable-product variations through manage-product-variation version 2 using exact product and variation IDs outside create.',
 				'Product delete moves the product to trash by default. Permanent deletion additionally requires force=true.',
-				'Only abilities listed in abilities.json can be executed through run-ability requests; supported namespaces are core/*, acf/*, yoast-seo/* and WooCommerce product abilities.',
-				'Destructive term, product, variation or ability operations require confirm_destructive=true.',
+				'Only live abilities explicitly annotated readonly can be executed through run-ability version 2. Mutable abilities remain catalogued for context but must use guarded versioned CRUD routes.',
+				'Destructive term, product or variation operations require confirm_destructive=true.',
 				'Only one request-processing poll may execute at a time; stale process locks expire after ten minutes.',
 			],
 		];

@@ -69,6 +69,7 @@ $assert(str_contains($content, 'acf_get_field_groups(') && str_contains($content
 $assert(str_contains($elementorDocuments, 'create_payload(') && str_contains($elementorDocuments, '$manager->get_document_type(') && str_contains($elementorDocuments, '$manager->create('), 'Elementor document creation does not validate and use the official document manager.');
 
 $assert(str_contains($products, "'elementor-json-bridge/manage-product'") && str_contains($products, 'publish_products'), 'WooCommerce product CRUD or publish capability checks are missing.');
+$assert(str_contains($products, 'public const VERSION = 2') && str_contains($terms, 'public const VERSION = 2') && str_contains($variations, 'public const VERSION = 2'), 'Mutating product/term/variation requests are not on the v2 conflict/snapshot contract.');
 $assert(str_contains($products, "[ 'taxonomies', 'acf', 'yoast', 'registered_meta' ]") && str_contains($products, "array_key_exists( 'elementor', \$request )") && str_contains($products, "\$desired['elementor'] = \$request['elementor'];"), 'Product ACF/Yoast/registered-meta/Elementor extensions are not routed through the managed content layer.');
 $assert(!str_contains($products, 'wp_update_post('), 'Product core writes still bypass WooCommerce CRUD.');
 $assert(str_contains($woo, 'wc_get_product(') && str_contains($woo, '$product->save()') && !str_contains($woo, 'update_post_meta('), 'WooCommerce product data is not using WooCommerce CRUD exclusively.');
@@ -84,7 +85,7 @@ $assert(str_contains($terms, '\\WPSEO_Taxonomy_Meta::set_values(') && str_contai
 $assert(str_contains($terms, 'rollback could not be verified') && str_contains($terms, 'assert_requested_state'), 'Taxonomy rollback/readback protection is incomplete.');
 
 $assert(str_contains($abilities, "'core/'") && str_contains($abilities, "'acf/'") && str_contains($abilities, "'yoast-seo/'") && str_contains($abilities, "'woocommerce/product-'") && str_contains($abilities, 'wp_get_ability(') && str_contains($abilities, 'is_exposed(') && str_contains($abilities, "'executable'"), 'Dynamic WordPress/ACF/Yoast/WooCommerce product Ability routing is incomplete.');
-$assert(str_contains($abilities, 'confirm_destructive=true'), 'Destructive Ability execution no longer requires explicit confirmation.');
+$assert(str_contains($abilities, "true === ( \$annotations['readonly'] ?? false )") && str_contains($abilities, 'Use guarded versioned CRUD requests'), 'Generic Ability execution is not restricted to explicitly read-only abilities.');
 $assert(str_contains($abilitySync, "'/abilities.json'") && str_contains($abilitySync, 'AbilityBridge') && str_contains($abilitySync, 'MAX_BYTES'), 'The bounded GitHub ability catalog sync is missing.');
 $assert(str_contains($abilitySync, "'integrations'") && str_contains($abilitySync, 'direct_product_fields') && str_contains($abilitySync, 'cogs_value_mode'), 'Ability catalog integration/product feature context is incomplete.');
 
