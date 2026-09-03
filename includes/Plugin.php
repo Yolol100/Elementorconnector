@@ -52,12 +52,12 @@ final class Plugin {
 		$woocommerce       = new WooCommerceProduct();
 		$woocommerce_extra = new WooCommerceProductExtras();
 		$content           = new WordPressDocument( $documents, $validator );
-		$posts             = new PostRequest( $content, $documents, $validator );
+		$snapshots         = new Snapshots();
+		$posts             = new PostRequest( $content, $documents, $validator, $snapshots );
 		$products          = new ProductRequest( $woocommerce, $woocommerce_extra, $content );
 		$terms             = new TaxonomyTerm();
 		$variations        = new ProductVariation();
 		$abilities         = new AbilityBridge();
-		$snapshots         = new Snapshots();
 		$lock              = new Lock();
 		$sync              = new Manager( $content, $github, $snapshots, $lock );
 		$capability_sync   = new ElementorCapabilities( $github );
