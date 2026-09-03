@@ -7,6 +7,8 @@ $posts = file_get_contents($root . '/includes/Content/PostRequest.php');
 $products = file_get_contents($root . '/includes/Content/ProductRequest.php');
 $variations = file_get_contents($root . '/includes/Content/ProductVariation.php');
 $productExtras = file_get_contents($root . '/includes/Content/WooCommerceProductExtras.php');
+$acfCatalog = file_get_contents($root . '/includes/Content/AcfFieldCatalog.php');
+$content = file_get_contents($root . '/includes/Content/WordPressDocument.php');
 $plugin = file_get_contents($root . '/includes/Plugin.php');
 $terms = file_get_contents($root . '/includes/Content/TaxonomyTerm.php');
 $requests = file_get_contents($root . '/includes/Sync/ContentRequests.php');
@@ -21,11 +23,15 @@ $assert = static function (bool $condition, string $message): void {
     }
 };
 
-foreach ([$posts, $products, $variations, $productExtras, $plugin, $terms, $requests, $abilities, $uninstall, $wpEnv, $ci] as $source) {
+foreach ([$posts, $products, $variations, $productExtras, $acfCatalog, $content, $plugin, $terms, $requests, $abilities, $uninstall, $wpEnv, $ci] as $source) {
     $assert(is_string($source), 'A request-safety source file could not be read.');
 }
 
+$assert(str_contains($posts, "'base_fingerprint'") && str_contains($posts, 'request_fingerprint(') && str_contains($posts, 'assert_fresh_request('), 'Post requests do not reject stale remote input.');
+$assert(str_contains($posts, '$this->snapshots->create(') && str_contains($posts, '$this->snapshots->payload(') && str_contains($posts, "'snapshot_id'"), 'Post request durable snapshot recovery is missing.');
 $assert(str_contains($posts, 'rollback could not be verified') && str_contains($posts, 'CanonicalJson::hash'), 'Post request rollback/readback verification is missing.');
+$assert(str_contains($content, "'request_fingerprint'") && str_contains($content, "'extended'") && str_contains($content, "'password'"), 'The site index cannot provide a complete request freshness fingerprint.');
+$assert(str_contains($plugin, 'new PostRequest( $content, $documents, $validator, $snapshots )'), 'Plugin bootstrap does not inject durable snapshots into post requests.');
 $assert(str_contains($products, "'force'") && str_contains($products, '$product->delete( $force )') && str_contains($products, "'trash' !== get_post_status"), 'WooCommerce soft/force delete semantics are missing.');
 $assert(str_contains($products, 'rollback could not be verified') && str_contains($products, 'exact readback verification'), 'WooCommerce product rollback/readback verification is missing.');
 $assert(str_contains($productExtras, 'global_unique_id') && str_contains($productExtras, 'low_stock_amount') && str_contains($productExtras, 'brand_ids') && str_contains($productExtras, 'set_global_unique_id') && str_contains($productExtras, 'set_brand_ids'), 'Current WooCommerce product-model extras are not bridged.');
@@ -34,7 +40,11 @@ $assert(str_contains($plugin, 'new WooCommerceProductExtras()') && str_contains(
 $assert(str_contains($terms, 'rollback could not be verified') && str_contains($terms, 'assert_requested_state'), 'Taxonomy request rollback/readback verification is missing.');
 $assert(str_contains($variations, 'rollback could not be verified') && str_contains($variations, 'assert_requested_state'), 'Variation request rollback/readback verification is missing.');
 $assert(str_contains($variations, 'global_unique_id') && str_contains($variations, 'low_stock_amount'), 'Variation requests do not cover current stable identifier/low-stock fields.');
-$assert(str_contains($requests, 'ejb_content_requests_lock') && str_contains($requests, 'add_option( self::PROCESS_LOCK_OPTION') && str_contains($requests, 'PROCESS_LOCK_TTL'), 'Atomic request-processing lock is missing.');
+$assert(str_contains($acfCatalog, 'acf_get_field_groups(') && str_contains($acfCatalog, 'acf_get_fields(') && str_contains($acfCatalog, 'get_field(') && str_contains($acfCatalog, 'update_field('), 'Applicable ACF fields are not discovered independently of existing metadata.');
+$assert(str_contains($requests, "Settings::get( 'auto_apply', 0 )") && substr_count($requests, "Settings::get( 'auto_apply', 0 )") >= 3, 'Request dispatch does not continuously honor the auto-apply opt-in.');
+$assert(str_contains($requests, 'ejb_content_requests_lock') && str_contains($requests, 'add_option( self::PROCESS_LOCK_OPTION') && str_contains($requests, 'PROCESS_LOCK_TTL'), 'Request-processing lock is missing.');
+$assert(str_contains($requests, 'UPDATE {$wpdb->options}') && str_contains($requests, 'option_value = %s') && str_contains($requests, 'DELETE FROM {$wpdb->options}'), 'Stale request locks are not replaced and released with compare-and-swap semantics.');
+$assert(!str_contains($requests, "delete_option( self::PROCESS_LOCK_OPTION );\n\t\t\tif ( add_option"), 'Stale request-lock takeover still deletes unconditionally.');
 $assert(str_contains($abilities, "'integrations'") && str_contains($abilities, 'WC_VERSION') && str_contains($abilities, 'WPSEO_VERSION') && str_contains($abilities, 'ACF_VERSION') && str_contains($abilities, 'ELEMENTOR_VERSION'), 'Ability catalog runtime version context is incomplete.');
 $assert(str_contains($uninstall, "delete_option( 'ejb_content_requests_lock' )"), 'Request-processing lock is not cleaned during uninstall.');
 $assert(str_contains($wpEnv, 'woocommerce.11.0.1.zip') && str_contains($wpEnv, 'wordpress-seo.28.4.zip') && str_contains($wpEnv, 'ejb-enable-acf-ai.php'), 'Current integration runtime versions or ACF AI test bootstrap are missing.');
