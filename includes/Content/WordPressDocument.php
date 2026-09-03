@@ -6,6 +6,7 @@ use RuntimeException;
 use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
+use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -128,6 +129,29 @@ final class WordPressDocument {
 		}
 
 		return $this->validate_array( $payload, $post_id );
+	}
+
+	public function request_fingerprint( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof \WP_Post || ! $this->supports( $post_id ) ) {
+			throw new RuntimeException( 'The WordPress content item cannot be fingerprinted.' );
+		}
+		$format   = get_post_format( $post_id );
+		$extended = [
+			'author'   => (int) $post->post_author,
+			'date'     => (string) $post->post_date,
+			'password' => (string) $post->post_password,
+			'format'   => false === $format ? '' : (string) $format,
+		];
+		if ( 'post' === $post->post_type ) {
+			$extended['sticky'] = is_sticky( $post_id );
+		}
+		return CanonicalJson::hash(
+			[
+				'content'  => $this->payload( $post_id ),
+				'extended' => $extended,
+			]
+		);
 	}
 
 	public function decode( string $json, int $post_id ): array {
@@ -344,15 +368,16 @@ final class WordPressDocument {
 			throw new RuntimeException( 'The WordPress content item cannot be indexed.' );
 		}
 		return [
-			'id'        => (int) $post->ID,
-			'post_type' => (string) $post->post_type,
-			'title'     => (string) $post->post_title,
-			'slug'      => (string) $post->post_name,
-			'status'    => (string) $post->post_status,
-			'path'      => $path,
-			'elementor' => $this->elementor->is_elementor_document( $post_id ),
-			'acf'       => function_exists( 'get_field_objects' ),
-			'yoast'     => class_exists( '\WPSEO_Meta' ),
+			'id'                  => (int) $post->ID,
+			'post_type'           => (string) $post->post_type,
+			'title'               => (string) $post->post_title,
+			'slug'                => (string) $post->post_name,
+			'status'              => (string) $post->post_status,
+			'path'                => $path,
+			'request_fingerprint' => $this->request_fingerprint( $post_id ),
+			'elementor'           => $this->elementor->is_elementor_document( $post_id ),
+			'acf'                 => AcfFieldCatalog::available(),
+			'yoast'               => class_exists( '\WPSEO_Meta' ),
 		];
 	}
 
@@ -411,52 +436,25 @@ final class WordPressDocument {
 	}
 
 	private function acf( int $post_id ): array {
-		if ( ! function_exists( 'get_field_objects' ) ) {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof \WP_Post ) {
 			return [];
 		}
-		$objects = get_field_objects( $post_id, false, true, false );
-		if ( ! is_array( $objects ) ) {
-			return [];
-		}
-		$result = [];
-		foreach ( $objects as $name => $field ) {
-			if ( ! is_array( $field ) || empty( $field['key'] ) || empty( $field['name'] ) ) {
-				continue;
-			}
-			$result[ (string) $name ] = [
-				'key'   => (string) $field['key'],
-				'type'  => (string) ( $field['type'] ?? '' ),
-				'value' => $field['value'] ?? null,
-			];
-		}
-		ksort( $result, SORT_STRING );
-		return $result;
+		return AcfFieldCatalog::for_post( $post_id, $post->post_type );
 	}
 
 	private function validate_acf( array $acf, int $post_id ): void {
 		if ( [] === $acf ) {
 			return;
 		}
-		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'update_field' ) ) {
+		if ( ! AcfFieldCatalog::available() ) {
 			throw new RuntimeException( 'ACF content is present but Advanced Custom Fields is not active.' );
 		}
-		$current = $this->acf( $post_id );
-		foreach ( $acf as $name => $field ) {
-			$keys = is_array( $field ) ? array_keys( $field ) : [];
-			sort( $keys, SORT_STRING );
-			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys ) {
-				throw new RuntimeException( 'The ACF field set no longer matches this WordPress item.' );
-			}
-			if ( $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
-				throw new RuntimeException( 'An ACF field identity changed after export.' );
-			}
-		}
+		AcfFieldCatalog::validate( $acf, $this->acf( $post_id ), 'The ACF field set no longer matches this WordPress item.' );
 	}
 
 	private function apply_acf( int $post_id, array $acf ): void {
-		foreach ( $acf as $field ) {
-			update_field( (string) $field['key'], $field['value'], $post_id );
-		}
+		AcfFieldCatalog::apply( $acf, $post_id );
 	}
 
 	private function yoast( int $post_id ): array {
