@@ -83,7 +83,7 @@ Product updates use `WC_Product` setters and `save()`. Product deletion follows 
 - `confirm_destructive=true`, no `force`: move to Trash when WooCommerce allows trashing.
 - `confirm_destructive=true` + `force=true`: permanent deletion.
 
-The bridge validates the full desired WooCommerce state before applying the request and performs exact readback. Failed updates attempt a verified rollback.
+The bridge validates the full desired WooCommerce state before applying the request and performs exact readback. Failed updates attempt a verified rollback from the durable pre-state snapshot.
 
 ### WooCommerce variations
 
@@ -108,7 +108,7 @@ The bridge does not hardcode a promise that every plugin ability exists. `abilit
 - `yoast-seo/*`,
 - WooCommerce product abilities (`woocommerce/product-*` and `woocommerce/products-*`).
 
-Each ability remains subject to its own WordPress permission callback and input/output schema. The generic GitHub ability route executes only abilities explicitly annotated read-only; mutable abilities must use guarded versioned CRUD adapters that can provide conflict checks, snapshots, readback and rollback.
+Each ability remains subject to its own WordPress permission callback and input/output schema. The generic GitHub ability route executes only abilities explicitly annotated read-only; mutable abilities remain discoverable context but must use guarded versioned CRUD adapters that can provide conflict checks, snapshots, readback and rollback.
 
 ## Safety model
 
@@ -116,12 +116,13 @@ Each ability remains subject to its own WordPress permission callback and input/
 2. Background actor must be the administrator who authorized the connection and still hold the bridge capability.
 3. Request payloads are bounded to 1 MB and use strict known-field validation.
 4. Request IDs are fingerprinted for idempotency; reusing an ID with changed input fails closed.
-5. Only one request-processing poll may execute at a time; stale process locks expire.
-6. Canonical content applies and `manage-post` update/delete requests use fresh conflict checks; `manage-post` also persists a local integrity-checked pre-mutation snapshot, followed by validation, supported APIs, readback and verified rollback.
-7. Direct request updates validate the desired state before mutation and verify/restore the previous state on failure.
-8. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
-9. WooCommerce product data is written through WooCommerce CRUD.
-10. Destructive product/term/variation/ability operations require explicit confirmation.
+5. Only one request-processing poll may execute at a time; stale process-lock takeover uses an atomic compare-and-swap.
+6. Canonical content and `manage-post` update/delete requests use fresh-state conflict checks, integrity-checked pre-mutation snapshots, validation, supported APIs, exact readback and verified rollback.
+7. Product, taxonomy-term and variation version-2 updates/deletes require a fresh read-derived `base_hash`, persist a durable typed pre-state snapshot before validation, then use supported APIs with readback and verified rollback.
+8. The generic version-2 Ability route executes read-only abilities only; mutable abilities cannot bypass the guarded CRUD safety sequence.
+9. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
+10. WooCommerce product data is written through WooCommerce CRUD, with product brands aligned to the canonical `product_brand` taxonomy envelope.
+11. Destructive product, taxonomy-term and variation operations require explicit confirmation; the generic Ability route performs no destructive writes.
 
 ## Runtime matrix
 
