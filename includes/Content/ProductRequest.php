@@ -52,6 +52,11 @@ final class ProductRequest {
 		if ( ! current_user_can( 'edit_post', $id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WooCommerce product.' );
 		}
+		if ( 'read' === $action ) {
+			return $this->result( 'read', $id );
+		}
+
+		$this->content->assert_state_token( $id, $request['expected_state_token'] ?? null );
 		if ( 'delete' === $action ) {
 			return $this->delete_product( $id, $request );
 		}
@@ -218,9 +223,10 @@ final class ProductRequest {
 	private function result( string $status, int $id ): array {
 		$product = wc_get_product( $id );
 		return [
-			'status'     => $status,
-			'product_id' => $id,
-			'post'       => [
+			'status'       => $status,
+			'product_id'   => $id,
+			'state_token'  => $this->content->state_token( $id ),
+			'post'         => [
 				'title'          => $product instanceof \WC_Product ? (string) $product->get_name( 'edit' ) : '',
 				'status'         => $product instanceof \WC_Product ? (string) $product->get_status( 'edit' ) : '',
 				'content'        => $product instanceof \WC_Product ? (string) $product->get_description( 'edit' ) : '',
@@ -232,18 +238,22 @@ final class ProductRequest {
 	}
 
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'confirm_destructive', 'force', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'product_id', 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'expected_state_token', 'confirm_destructive', 'force', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The product request contains unsupported fields.' );
 		}
 		if ( self::FORMAT !== ( $request['format'] ?? null ) || self::VERSION !== (int) ( $request['version'] ?? 0 ) ) {
 			throw new RuntimeException( 'The product request format or version is invalid.' );
 		}
-		if ( ! in_array( (string) ( $request['action'] ?? '' ), [ 'create', 'update', 'delete' ], true ) ) {
+		$action = (string) ( $request['action'] ?? '' );
+		if ( ! in_array( $action, [ 'create', 'read', 'update', 'delete' ], true ) ) {
 			throw new RuntimeException( 'The product request action is invalid.' );
 		}
-		if ( 'create' !== (string) $request['action'] && (int) ( $request['product_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting a product requires an exact product_id.' );
+		if ( 'create' !== $action && (int) ( $request['product_id'] ?? 0 ) < 1 ) {
+			throw new RuntimeException( 'Reading, updating or deleting a product requires an exact product_id.' );
+		}
+		if ( in_array( $action, [ 'update', 'delete' ], true ) && ( ! is_string( $request['expected_state_token'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['expected_state_token'] ) ) ) {
+			throw new RuntimeException( 'Updating or deleting a product requires a valid expected_state_token.' );
 		}
 		foreach ( [ 'post', 'woocommerce', 'taxonomies', 'acf', 'yoast', 'registered_meta' ] as $field ) {
 			if ( isset( $request[ $field ] ) && ( ! is_array( $request[ $field ] ) || ( [] !== $request[ $field ] && array_is_list( $request[ $field ] ) ) ) ) {
