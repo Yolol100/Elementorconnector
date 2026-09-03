@@ -38,7 +38,9 @@ WooCommerce catalog fields use `manage-product` and `manage-product-variation` r
 
 == Request operations ==
 
-`elementor-json-bridge/manage-post` supports create, update and delete for managed WordPress content. New content is always a draft. Delete requires `confirm_destructive=true`.
+`elementor-json-bridge/manage-post` version 2 supports create, update and delete for managed WordPress content. Version 2 is a safety migration: pending version-1 `manage-post` request files must be regenerated before execution. New content is always a draft. Update and delete require a `base_hash` calculated from the exact canonical content JSON used to author the request; stale hashes fail closed. Delete additionally requires `confirm_destructive=true`.
+
+The version-2 `post` object accepts only fields present in the canonical conflict/snapshot envelope: title, slug, status, content, excerpt, parent, menu order, comment status, ping status, page template and featured image. Author, date, password, post format and sticky state are deliberately not request-mutable because those fields are outside that canonical envelope and therefore cannot be given the same conflict and durable-snapshot guarantees without expanding the protocol.
 
 When an explicit Elementor payload is supplied for a new item, the bridge creates the document through Elementor's document manager and saves it through Elementor's document API. It never directly writes `_elementor_data`.
 
@@ -59,10 +61,11 @@ Product deletion follows WooCommerce semantics: confirmed deletion moves to Tras
 * The recorded background actor must still hold the bridge capability.
 * Request JSON is bounded and rejects unknown fields.
 * `request_id` values are fingerprinted; an ID cannot be reused for changed input.
-* A process lock prevents two request polls from executing the same unrecorded operation concurrently.
-* Direct update handlers validate desired state before writing and perform exact readback; failures attempt verified rollback.
+* A process lock prevents two request polls from executing the same unrecorded operation concurrently, and stale-lock takeover uses an atomic compare-and-swap.
+* Automatic GitHub request dispatch honors the explicit `auto_apply` opt-in.
+* `manage-post` version 2 update/delete follows fresh canonical state -> `base_hash` conflict check -> durable snapshot -> validation -> save -> exact readback; stale or legacy requests fail closed.
 * Existing canonical content uses fresh conflict checks, integrity-checked snapshots, supported APIs, exact fingerprint readback and verified rollback.
-* ACF fields remain bound to their live field name/key/type identity.
+* ACF fields remain bound to their live field name/key/type identity, including guarded first writes for fields registered on the target screen.
 * Calculated Yoast analysis/indexable data is not bulk written as editable SEO metadata.
 * Elementor storage is never directly mutated.
 * WooCommerce catalog data is written through WooCommerce CRUD.
@@ -91,13 +94,16 @@ Authentication, processed request IDs and request-process lock state are always 
 
 = 0.6.0 =
 * Add guarded create/update/delete requests for WordPress content, WooCommerce products, variations and taxonomy terms.
+* Version `manage-post` as contract version 2 for mandatory stale-request protection; version-1 pending request files must be regenerated.
+* Restrict `manage-post` version 2 to the canonical conflict/snapshot envelope and create durable snapshots before validation for update/delete operations.
 * Create new Elementor documents through Elementor's official document manager when an Elementor payload is explicitly requested.
 * Add live WordPress Abilities discovery for safe Core, ACF, Yoast SEO and WooCommerce product capabilities.
 * Add ACF AI capability context and current integration version context to `abilities.json`.
 * Route WooCommerce product core/catalog writes through WooCommerce CRUD and align delete behavior with WooCommerce Trash/force semantics.
 * Add current stable WooCommerce global identifier, low-stock and product-brand fields; keep feature-gated COGS fail-closed.
 * Add prevalidation, exact readback and verified rollback to direct update operations.
-* Add a process lock around request polling to prevent duplicate concurrent execution windows.
+* Make GitHub request dispatch honor automatic-apply opt-in and use atomic stale-lock takeover.
+* Support guarded ACF first writes while preserving live field name/key/type identity.
 * Expand current runtime CI to ACF 6.8.9, Yoast SEO 28.4 and WooCommerce 11.0.1 with positive and negative integration scenarios.
 
 = 0.5.0 =
