@@ -179,7 +179,8 @@ try {
 		},
 		'PostRequest accepted stale target state.'
 	);
-	if ( 'EJB Local Newer Title' !== get_the_title( $page_id ) ) {
+	$locally_edited_page = get_post( $page_id );
+	if ( ! $locally_edited_page instanceof WP_Post || 'EJB Local Newer Title' !== $locally_edited_page->post_title ) {
 		throw new RuntimeException( 'A stale post request overwrote a newer local edit.' );
 	}
 	wp_update_post( [ 'ID' => $page_id, 'post_title' => 'EJB Request Page Updated' ] );
