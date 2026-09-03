@@ -70,6 +70,7 @@ final class ProductRequest {
 		$current_woo     = $this->woo_payload( $id );
 		$desired_content = $this->desired_content( $id, $current_content, $core, $request, true );
 		$desired_woo     = $this->desired_woo( $id, $current_woo, $woo );
+		[ $desired_content, $desired_woo ] = $this->align_brand_state( $desired_content, $desired_woo, $request );
 
 		$this->validate_core_extras( $core, true );
 		$this->apply_core( $id, $core, true );
@@ -84,6 +85,7 @@ final class ProductRequest {
 		$before_password = (string) get_post_field( 'post_password', $id, 'raw' );
 		$desired_content = $this->desired_content( $id, $before_content, $core, $request, false );
 		$desired_woo     = $this->desired_woo( $id, $before_woo, $woo );
+		[ $desired_content, $desired_woo ] = $this->align_brand_state( $desired_content, $desired_woo, $request );
 
 		$this->validate_core_extras( $core, false );
 		try {
@@ -150,6 +152,62 @@ final class ProductRequest {
 		$base                     = $this->products->validate( $base, $id );
 		$extras                   = $this->product_extras->validate( $extras, $id );
 		return array_merge( $base, $extras );
+	}
+
+	private function align_brand_state( array $content, array $woo, array $request ): array {
+		if ( ! array_key_exists( 'brand_ids', $woo ) || ! taxonomy_exists( 'product_brand' ) ) {
+			return [ $content, $woo ];
+		}
+
+		$woo_requested = is_array( $request['woocommerce'] ?? null ) && array_key_exists( 'brand_ids', $request['woocommerce'] );
+		$taxonomy_requested = is_array( $request['taxonomies'] ?? null ) && array_key_exists( 'product_brand', $request['taxonomies'] );
+		if ( ! $woo_requested && ! $taxonomy_requested ) {
+			return [ $content, $woo ];
+		}
+
+		$woo_ids = array_values( array_map( 'intval', $woo['brand_ids'] ) );
+		sort( $woo_ids, SORT_NUMERIC );
+		$taxonomy_slugs = is_array( $content['taxonomies']['product_brand'] ?? null ) ? array_values( array_map( 'strval', $content['taxonomies']['product_brand'] ) ) : [];
+		sort( $taxonomy_slugs, SORT_STRING );
+
+		if ( $woo_requested ) {
+			$woo_slugs = $this->brand_slugs( $woo_ids );
+			if ( $taxonomy_requested && $taxonomy_slugs !== $woo_slugs ) {
+				throw new RuntimeException( 'WooCommerce brand_ids and product_brand taxonomy input describe different brands.' );
+			}
+			$content['taxonomies']['product_brand'] = $woo_slugs;
+			$woo['brand_ids'] = $woo_ids;
+			return [ $content, $woo ];
+		}
+
+		$woo['brand_ids'] = $this->brand_ids( $taxonomy_slugs );
+		return [ $content, $woo ];
+	}
+
+	private function brand_slugs( array $brand_ids ): array {
+		$slugs = [];
+		foreach ( $brand_ids as $brand_id ) {
+			$term = get_term( $brand_id, 'product_brand' );
+			if ( ! $term instanceof \WP_Term ) {
+				throw new RuntimeException( 'A requested WooCommerce brand no longer exists.' );
+			}
+			$slugs[] = (string) $term->slug;
+		}
+		sort( $slugs, SORT_STRING );
+		return $slugs;
+	}
+
+	private function brand_ids( array $brand_slugs ): array {
+		$ids = [];
+		foreach ( $brand_slugs as $slug ) {
+			$term = get_term_by( 'slug', $slug, 'product_brand' );
+			if ( ! $term instanceof \WP_Term ) {
+				throw new RuntimeException( 'A requested WooCommerce product_brand term no longer exists.' );
+			}
+			$ids[] = (int) $term->term_id;
+		}
+		sort( $ids, SORT_NUMERIC );
+		return $ids;
 	}
 
 	private function apply_woo( int $id, array $woo ): void {
