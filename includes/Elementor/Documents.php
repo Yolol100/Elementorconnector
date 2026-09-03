@@ -58,8 +58,8 @@ final class Documents {
 			throw new RuntimeException( 'Elementor did not return a document.' );
 		}
 		$post_id = (int) $document->get_main_id();
-		if ( $post_id < 1 || get_post_type( $post_id ) !== $post_type ) {
-			if ( $post_id > 0 ) {
+		if ( 1 > $post_id || get_post_type( $post_id ) !== $post_type ) {
+			if ( 0 < $post_id ) {
 				wp_delete_post( $post_id, true );
 			}
 			throw new RuntimeException( 'Elementor created an unexpected WordPress content type.' );
