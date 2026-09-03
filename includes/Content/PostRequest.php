@@ -4,6 +4,7 @@ namespace Webactueel\ElementorJsonBridge\Content;
 
 use DateTimeImmutable;
 use RuntimeException;
+use Webactueel\ElementorJsonBridge\Backup\Snapshots;
 use Webactueel\ElementorJsonBridge\Elementor\Documents;
 use Webactueel\ElementorJsonBridge\Elementor\PayloadValidator;
 use Webactueel\ElementorJsonBridge\Support\CanonicalJson;
@@ -17,7 +18,8 @@ final class PostRequest {
 	public function __construct(
 		private readonly WordPressDocument $content,
 		private readonly Documents $elementor,
-		private readonly PayloadValidator $elementor_validator
+		private readonly PayloadValidator $elementor_validator,
+		private readonly Snapshots $snapshots
 	) {}
 
 	public function execute( array $request ): array {
@@ -31,7 +33,11 @@ final class PostRequest {
 			$id = array_key_exists( 'elementor', $request )
 				? $this->create_elementor_draft( $request, $request_post )
 				: $this->create_wordpress_draft( $request, $request_post );
-			return [ 'status' => 'created', 'post_id' => $id ];
+			return [
+				'status'              => 'created',
+				'post_id'             => $id,
+				'request_fingerprint' => $this->content->request_fingerprint( $id ),
+			];
 		}
 
 		$id = (int) ( $request['post_id'] ?? 0 );
@@ -41,6 +47,8 @@ final class PostRequest {
 		if ( ! current_user_can( 'edit_post', $id ) ) {
 			throw new RuntimeException( 'You are not allowed to edit this WordPress content item.' );
 		}
+		$this->assert_fresh_request( $id, $request );
+
 		if ( 'delete' === $action ) {
 			if ( true !== ( $request['confirm_destructive'] ?? false ) ) {
 				throw new RuntimeException( 'Deleting WordPress content requires confirm_destructive=true.' );
@@ -48,10 +56,11 @@ final class PostRequest {
 			if ( ! current_user_can( 'delete_post', $id ) ) {
 				throw new RuntimeException( 'You are not allowed to delete this WordPress content item.' );
 			}
+			$snapshot_id = $this->snapshots->create( $id, $this->content->payload( $id ), 'before_request_delete' );
 			if ( ! wp_trash_post( $id ) || 'trash' !== get_post_status( $id ) ) {
 				throw new RuntimeException( 'WordPress content trash failed readback verification.' );
 			}
-			return [ 'status' => 'deleted', 'post_id' => $id ];
+			return [ 'status' => 'deleted', 'post_id' => $id, 'snapshot_id' => $snapshot_id ];
 		}
 
 		$post            = is_array( $request['post'] ?? null ) ? $request['post'] : [];
@@ -59,6 +68,7 @@ final class PostRequest {
 		$before_extended = $this->extended_state( $id );
 		$desired         = $this->desired_content( $id, $before_content, $post, $request, false );
 		$this->validate_extended_post_fields( $id, $post );
+		$snapshot_id = $this->snapshots->create( $id, $before_content, 'before_request_update' );
 
 		try {
 			$this->content->apply( $id, $desired );
@@ -66,15 +76,21 @@ final class PostRequest {
 			$this->verify_state( $id, $desired, $post );
 		} catch ( \Throwable $apply_error ) {
 			try {
-				$this->content->apply( $id, $before_content );
+				$rollback = $this->snapshots->payload( $snapshot_id, $id );
+				$this->content->apply( $id, $rollback );
 				$this->apply_extended_post_fields( $id, $before_extended );
-				$this->verify_state( $id, $before_content, $before_extended );
+				$this->verify_state( $id, $rollback, $before_extended );
 			} catch ( \Throwable $rollback_error ) {
 				throw new RuntimeException( 'WordPress content update failed and rollback could not be verified: ' . $rollback_error->getMessage(), 0, $apply_error );
 			}
 			throw new RuntimeException( 'WordPress content update failed. The previous content state was restored.', 0, $apply_error );
 		}
-		return [ 'status' => 'updated', 'post_id' => $id ];
+		return [
+			'status'              => 'updated',
+			'post_id'             => $id,
+			'snapshot_id'         => $snapshot_id,
+			'request_fingerprint' => $this->content->request_fingerprint( $id ),
+		];
 	}
 
 	private function create_wordpress_draft( array $request, array $request_post ): int {
@@ -130,9 +146,9 @@ final class PostRequest {
 		$elementor          = $this->elementor_validator->validate_array( $elementor );
 		$id                 = $this->elementor->create_payload( (string) $request['post_type'], $elementor );
 		try {
-			$current = $this->content->payload( $id );
+			$current              = $this->content->payload( $id );
 			$request['elementor'] = $elementor;
-			$desired = $this->desired_content( $id, $current, $request_post, $request, true );
+			$desired              = $this->desired_content( $id, $current, $request_post, $request, true );
 			$this->validate_extended_post_fields( $id, $request_post );
 			$this->content->apply( $id, $desired );
 			$this->apply_extended_post_fields( $id, $request_post );
@@ -190,11 +206,12 @@ final class PostRequest {
 		if ( ! $post instanceof \WP_Post ) {
 			throw new RuntimeException( 'The WordPress content item no longer exists.' );
 		}
-		$state = [
+		$format = get_post_format( $id );
+		$state  = [
 			'author'   => (int) $post->post_author,
 			'date'     => (string) $post->post_date,
 			'password' => (string) $post->post_password,
-			'format'   => (string) ( get_post_format( $id ) ?: '' ),
+			'format'   => false === $format ? '' : (string) $format,
 		];
 		if ( 'post' === $post->post_type ) {
 			$state['sticky'] = is_sticky( $id );
@@ -203,7 +220,7 @@ final class PostRequest {
 	}
 
 	private function validate_request( array $request ): void {
-		$allowed = [ 'format', 'version', 'request_id', 'action', 'post_id', 'post_type', 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'confirm_destructive', 'result' ];
+		$allowed = [ 'format', 'version', 'request_id', 'action', 'post_id', 'post_type', 'post', 'taxonomies', 'acf', 'yoast', 'registered_meta', 'elementor', 'base_fingerprint', 'confirm_destructive', 'result' ];
 		if ( array_diff( array_keys( $request ), $allowed ) ) {
 			throw new RuntimeException( 'The post request contains unsupported fields.' );
 		}
@@ -217,11 +234,23 @@ final class PostRequest {
 			if ( ! is_string( $request['post_type'] ?? null ) || ! is_array( $request['post'] ?? null ) ) {
 				throw new RuntimeException( 'Creating content requires post_type and post.' );
 			}
-		} elseif ( (int) ( $request['post_id'] ?? 0 ) < 1 ) {
-			throw new RuntimeException( 'Updating or deleting content requires an exact post_id.' );
+		} else {
+			if ( 1 > (int) ( $request['post_id'] ?? 0 ) ) {
+				throw new RuntimeException( 'Updating or deleting content requires an exact post_id.' );
+			}
+			if ( ! is_string( $request['base_fingerprint'] ?? null ) || 1 !== preg_match( '/^[a-f0-9]{64}$/D', $request['base_fingerprint'] ) ) {
+				throw new RuntimeException( 'Updating or deleting content requires the current request_fingerprint from site-index.json.' );
+			}
 		}
 		if ( isset( $request['post'] ) && ( ! is_array( $request['post'] ) || ( [] !== $request['post'] && array_is_list( $request['post'] ) ) ) ) {
 			throw new RuntimeException( 'The post request post field must be an object.' );
+		}
+	}
+
+	private function assert_fresh_request( int $id, array $request ): void {
+		$current = $this->content->request_fingerprint( $id );
+		if ( ! hash_equals( $current, (string) $request['base_fingerprint'] ) ) {
+			throw new RuntimeException( 'The WordPress content changed after this request was authored. Refresh site-index.json and create a new request.' );
 		}
 	}
 
@@ -272,7 +301,7 @@ final class PostRequest {
 		if ( array_key_exists( 'password', $post ) ) {
 			$update['post_password'] = $post['password'];
 		}
-		if ( count( $update ) > 1 ) {
+		if ( 1 < count( $update ) ) {
 			$result = wp_update_post( wp_slash( $update ), true );
 			if ( is_wp_error( $result ) ) {
 				throw new RuntimeException( 'WordPress rejected the extended content update.' );
