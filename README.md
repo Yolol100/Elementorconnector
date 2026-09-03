@@ -1,8 +1,27 @@
-# Elementor JSON Bridge
+# Elementor JSON Bridge — Controlled WordPress Content Automation
 
-> **Status:** active development · WordPress/PHP · staging-first for production rollout
+> **Portfolio flagship · WordPress/PHP · Elementor · ACF · Yoast SEO · WooCommerce · GitHub Actions**
 
-Elementor JSON Bridge connects editable WordPress content to a **private GitHub repository**. The WordPress plugin remains the execution boundary: tools can prepare reviewed JSON in GitHub, while WordPress rechecks permissions, validates the payload, writes through supported WordPress/plugin APIs and verifies readback.
+Elementor JSON Bridge is a WordPress plugin that lets reviewed changes move between GitHub and WordPress without bypassing WordPress, Elementor or WooCommerce APIs. It is designed for teams that want automation without turning content updates into uncontrolled direct database writes.
+
+**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)  
+**Status:** active development · staging-first for production rollout
+
+## What problem it solves
+
+WordPress automation becomes risky when external tools write directly to post meta, Elementor data or WooCommerce records. This project keeps WordPress as the execution boundary: tools can prepare reviewed JSON in GitHub, while WordPress rechecks permissions, validates the payload, writes through supported APIs and verifies the resulting state.
+
+## Technical snapshot
+
+| Area | Evidence |
+| --- | --- |
+| WordPress | Pages, posts, custom post types and taxonomy terms |
+| Elementor | Existing documents plus explicitly requested new documents through Elementor APIs |
+| ACF | Field values tied to live field identity and supported abilities |
+| Yoast SEO | Conservative user-editable SEO metadata and live registered abilities |
+| WooCommerce | Products, variations, categories, tags and brands through WooCommerce CRUD |
+| Safety | Validation, conflict checks, idempotency, readback and verified rollback |
+| Delivery | Composer, wp-env, GitHub Actions, integration matrices and deterministic release builds |
 
 Version **0.6.0** expands the bridge with guarded CRUD request flows for WordPress content, Elementor documents, WooCommerce catalog data, taxonomy terms and product variations, plus a live WordPress Abilities catalog for ACF, Yoast SEO, WooCommerce and safe Core discovery.
 
@@ -155,6 +174,12 @@ For the site content repository the app needs Repository permissions → **Conte
 ## Release discipline
 
 `main` is protected by required CI checks. Tagged versions rerun the quality workflow, verify tag/source/readme version parity, build the ZIP twice and create a draft GitHub Release. Publishing remains a separate staging/browser gate.
+
+## About the developer
+
+I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across 70+ WordPress projects. I build WordPress and WooCommerce solutions and work across Elementor, ACF, UX, performance, technical SEO and automated QA.
+
+[Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
 
 ## License
 
