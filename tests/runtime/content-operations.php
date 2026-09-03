@@ -525,7 +525,7 @@ try {
 
 	$catalog = $abilities->catalog();
 	$available = is_array( $catalog['abilities'] ?? null ) ? $catalog['abilities'] : [];
-	foreach ( [ 'core/get-site-info', 'acf/field-groups', 'acf/register-field-group', 'yoast-seo/get-seo-scores', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete', 'woocommerce/products-query' ] as $ability_name ) {
+	foreach ( [ 'core/get-site-info', 'acf/field-groups', 'acf/register-field-group', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete', 'woocommerce/products-query' ] as $ability_name ) {
 		if ( ! isset( $available[ $ability_name ] ) ) {
 			throw new RuntimeException( 'Expected runtime ability is missing: ' . $ability_name );
 		}
