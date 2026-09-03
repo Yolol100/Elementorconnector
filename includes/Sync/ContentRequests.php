@@ -41,11 +41,11 @@ final class ContentRequests {
 	}
 
 	public function process(): void {
-		if ( ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
+		if ( ! Settings::get( 'auto_apply', 0 ) || ! Settings::repo_is_configured() || ! get_option( Settings::AUTH_OPTION, '' ) ) {
 			return;
 		}
 		$actor_id = (int) Settings::get( 'auto_apply_actor', 0 );
-		if ( $actor_id < 1 || ! user_can( $actor_id, Hooks::CAPABILITY ) ) {
+		if ( 1 > $actor_id || ! user_can( $actor_id, Hooks::CAPABILITY ) ) {
 			return;
 		}
 		$lock_token = $this->acquire_process_lock();
@@ -65,7 +65,7 @@ final class ContentRequests {
 
 			$processed_count = 0;
 			foreach ( $entries as $entry ) {
-				if ( $processed_count >= self::MAX_PER_RUN ) {
+				if ( $processed_count >= self::MAX_PER_RUN || ! Settings::get( 'auto_apply', 0 ) ) {
 					break;
 				}
 				if ( 'file' !== ( $entry['type'] ?? '' ) ) {
@@ -88,7 +88,7 @@ final class ContentRequests {
 		$path = trim( $root . '/bridge.json', '/' );
 		$manifest = [
 			'format'                => 'elementor-json-bridge/repository-manifest',
-			'version'               => 4,
+			'version'               => 5,
 			'site_index'            => trim( $root . '/site-index.json', '/' ),
 			'ability_catalog'       => trim( $root . '/abilities.json', '/' ),
 			'content_path_pattern'  => trim( $root . '/content/{kind}/{id}.json', '/' ),
@@ -110,13 +110,14 @@ final class ContentRequests {
 				'Do not change source.id or source.post_type in an existing content file.',
 				'Use a globally unique request_id for each request. Reusing an ID with different input is rejected.',
 				'New pages, posts and products are always created as drafts; publishing requires an explicit later update with publish capability.',
+				'Manage-post update/delete requests must include the current request_fingerprint from site-index.json as base_fingerprint.',
 				'When creating Elementor content, use manage-post with an elementor document payload so the item is created through Elementor document management.',
 				'Create, update or delete categories, tags and product categories through manage-term requests using exact term IDs for update/delete.',
 				'Create, update or delete variable-product variations through manage-product-variation requests using exact product and variation IDs.',
 				'Product delete moves the product to trash by default. Permanent deletion additionally requires force=true.',
 				'Only abilities listed in abilities.json can be executed through run-ability requests; supported namespaces are core/*, acf/*, yoast-seo/* and WooCommerce product abilities.',
 				'Destructive term, product, variation or ability operations require confirm_destructive=true.',
-				'Only one request-processing poll may execute at a time; stale process locks expire after ten minutes.',
+				'Only one request-processing poll may execute at a time; stale process locks use an atomic compare-and-swap takeover after ten minutes.',
 			],
 		];
 		$encoded = CanonicalJson::encode( $manifest, true );
@@ -170,6 +171,9 @@ final class ContentRequests {
 				$this->write_result( $path, $file, $request, [ 'status' => 'error', 'message' => 'This request_id was already used for different input.' ] );
 				return;
 			}
+			if ( ! Settings::get( 'auto_apply', 0 ) || ! user_can( $actor_id, Hooks::CAPABILITY ) ) {
+				return;
+			}
 
 			$previous_user = get_current_user_id();
 			wp_set_current_user( $actor_id );
@@ -208,11 +212,23 @@ final class ContentRequests {
 		}
 		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
 		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
-		if ( is_array( $data ) && time() - (int) ( $data['created_at'] ?? time() ) > self::PROCESS_LOCK_TTL ) {
-			delete_option( self::PROCESS_LOCK_OPTION );
-			if ( add_option( self::PROCESS_LOCK_OPTION, $value, '', false ) ) {
-				return $token;
-			}
+		if ( ! is_array( $data ) || time() - (int) ( $data['created_at'] ?? time() ) <= self::PROCESS_LOCK_TTL ) {
+			return '';
+		}
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Atomic compare-and-swap is required so concurrent stale-lock takeovers cannot delete a fresh lock.
+		$replaced = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
+				$value,
+				self::PROCESS_LOCK_OPTION,
+				$existing
+			)
+		);
+		if ( 1 === $replaced ) {
+			wp_cache_delete( self::PROCESS_LOCK_OPTION, 'options' );
+			return $token;
 		}
 		return '';
 	}
@@ -220,8 +236,21 @@ final class ContentRequests {
 	private function release_process_lock( string $token ): void {
 		$existing = get_option( self::PROCESS_LOCK_OPTION, '' );
 		$data     = is_string( $existing ) ? json_decode( $existing, true ) : null;
-		if ( is_array( $data ) && hash_equals( (string) ( $data['token'] ?? '' ), $token ) ) {
-			delete_option( self::PROCESS_LOCK_OPTION );
+		if ( ! is_array( $data ) || ! hash_equals( (string) ( $data['token'] ?? '' ), $token ) ) {
+			return;
+		}
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Conditional deletion prevents an old owner from releasing a replacement lock.
+		$deleted = $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+				self::PROCESS_LOCK_OPTION,
+				$existing
+			)
+		);
+		if ( 1 === $deleted ) {
+			wp_cache_delete( self::PROCESS_LOCK_OPTION, 'options' );
 		}
 	}
 
@@ -245,7 +274,7 @@ final class ContentRequests {
 		return [
 			'status'  => 'created',
 			'post_id' => $post_id,
-			'path'    => $post_id > 0 && $this->manager->is_enabled( $post_id ) ? $this->manager->path_for( $post_id ) : '',
+			'path'    => 0 < $post_id && $this->manager->is_enabled( $post_id ) ? $this->manager->path_for( $post_id ) : '',
 		];
 	}
 
