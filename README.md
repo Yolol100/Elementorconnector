@@ -177,7 +177,7 @@ For the site content repository the app needs Repository permissions → **Conte
 
 ## About the developer
 
-I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across 70+ WordPress projects. I build WordPress and WooCommerce solutions and work across Elementor, ACF, UX, performance, technical SEO and automated QA.
+I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across **90+ WordPress projects**. I currently manage and regularly update **120+ websites and webshops**, covering maintenance, UX, performance, technical SEO, QA and ongoing WordPress/WooCommerce improvements.
 
 [Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
 
