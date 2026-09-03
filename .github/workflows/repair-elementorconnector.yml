@@ -21,6 +21,17 @@ jobs:
       - name: Apply exact repair
         run: python3 .github/repair_elementorconnector.py
 
+      - name: Correct literal regression assertions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('tests/wordpress-content-sync.php', 'tests/content-request-safety.php'):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace("[ 'taxonomy' => $taxonomy ]", "[ 'taxonomy' => \\$taxonomy ]")
+              path.write_text(text, encoding='utf-8')
+          PY
+
       - name: PHP syntax
         run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 
