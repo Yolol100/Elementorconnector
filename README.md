@@ -20,7 +20,7 @@ WordPress automation becomes risky when external tools write directly to post me
 | ACF | Field values tied to live field identity and supported abilities |
 | Yoast SEO | Conservative user-editable SEO metadata and live registered abilities |
 | WooCommerce | Products, variations, categories, tags and brands through WooCommerce CRUD |
-| Safety | Validation, conflict checks, idempotency, readback and verified rollback |
+| Safety | Validation, site-scoped fresh-state tokens, idempotency, compare-and-swap locking, integrity snapshots, readback and verified rollback |
 | Delivery | Composer, wp-env, GitHub Actions, integration matrices and deterministic release builds |
 
 Version **0.6.0** expands the bridge with guarded CRUD request flows for WordPress content, Elementor documents, WooCommerce catalog data, taxonomy terms and product variations, plus a live WordPress Abilities catalog for ACF, Yoast SEO, WooCommerce and safe Core discovery.
@@ -62,13 +62,15 @@ site-data/
 
 WooCommerce catalog fields are intentionally request-driven: use `manage-product` / `manage-product-variation` so writes go through WooCommerce CRUD and exact readback instead of generic post-meta mutation.
 
+For an existing post, product, variation or taxonomy term, first use that request type's `read` action. The result contains a site-scoped `state_token`. Every later `update` or `delete` must send that exact value as `expected_state_token`. If the target changes after the read, the write is rejected before mutation and a fresh read/request is required.
+
 ## Supported request formats
 
 ### WordPress content
 
 `elementor-json-bridge/manage-post`, version `1`
 
-Actions: `create`, `update`, `delete`. New items are drafts. Delete requires `confirm_destructive=true`.
+Actions: `create`, `read`, `update`, `delete`. New items are drafts. `read` returns the current payload plus `state_token`; update/delete require the matching `expected_state_token`. Delete additionally requires `confirm_destructive=true`.
 
 When a create request contains an `elementor` document payload, creation is routed through `Elementor\Plugin::$instance->documents->create()` and saved through the Elementor document API. A normal WordPress item is never silently converted into Elementor content.
 
@@ -76,7 +78,7 @@ When a create request contains an `elementor` document payload, creation is rout
 
 `elementor-json-bridge/manage-product`, version `1`
 
-Actions: `create`, `update`, `delete`.
+Actions: `create`, `read`, `update`, `delete`. Reads return `state_token`; update/delete require the matching `expected_state_token`.
 
 Product updates use `WC_Product` setters and `save()`. Product deletion follows WooCommerce semantics:
 
@@ -89,13 +91,13 @@ The bridge validates the full desired WooCommerce state before applying the requ
 
 `elementor-json-bridge/manage-product-variation`, version `1`
 
-Create, update and permanent delete are supported against an exact variable-product parent. Destructive deletion requires confirmation. Variation writes use `WC_Product_Variation` and verified readback/rollback.
+Create, read, update and permanent delete are supported against an exact variable-product parent. Reads return `state_token`; update/delete require the matching `expected_state_token`. Destructive deletion also requires confirmation. Variation writes use `WC_Product_Variation` and verified readback/rollback.
 
 ### Taxonomy terms
 
 `elementor-json-bridge/manage-term`, version `1`
 
-Create, update and delete terms using WordPress taxonomy APIs. Term ACF and Yoast data are supported where the relevant plugin APIs are active. A late extension failure cannot silently leave a partially renamed/updated term.
+Create, read, update and delete terms using WordPress taxonomy APIs. Reads return `state_token`; update/delete require the matching `expected_state_token`. Term ACF and Yoast data are supported where the relevant plugin APIs are active. A late extension failure cannot silently leave a partially renamed/updated term; authoritative ACF rollback also removes fields that were newly introduced by the failed request.
 
 ### WordPress Abilities
 
@@ -113,15 +115,17 @@ Each ability remains subject to its own WordPress permission callback and input/
 ## Safety model
 
 1. Private GitHub repository required.
-2. Background actor must be the administrator who authorized the connection and still hold the bridge capability.
+2. Background actor must be the administrator who authorized the connection and still hold the bridge capability; repository-authored request execution follows the same `auto_apply` opt-in.
 3. Request payloads are bounded to 1 MB and use strict known-field validation.
 4. Request IDs are fingerprinted for idempotency; reusing an ID with changed input fails closed.
-5. Only one request-processing poll may execute at a time; stale process locks expire.
-6. Existing content uses fresh conflict checks, local integrity-checked snapshots, validation, supported APIs, full readback and verified rollback.
-7. Direct request updates validate the desired state before mutation and verify/restore the previous state on failure.
-8. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
-9. WooCommerce product data is written through WooCommerce CRUD.
-10. Destructive product/term/variation/ability operations require explicit confirmation.
+5. Only one request-processing poll may execute at a time. Initial ownership uses an atomic option insert; stale takeover and release use compare-and-swap/conditional deletion so an older worker cannot delete a newer lock.
+6. Existing request targets use site-scoped state tokens. Update/delete must present the token from an immediately preceding read, and stale tokens fail before mutation.
+7. Existing canonical content uses fresh conflict checks, local integrity-checked snapshots, validation, supported APIs, full readback and verified rollback.
+8. Direct post updates create a durable pre-mutation snapshot, including integrity-checked extended state, before applying changes. Direct product, variation and term updates also prevalidate, read back and verify rollback on failure.
+9. ACF fields remain bound to live field identity; authoritative rollback removes new ACF values that were introduced by a failed request.
+10. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
+11. WooCommerce product data is written through WooCommerce CRUD.
+12. Destructive product/term/variation/ability operations require explicit confirmation.
 
 ## Runtime matrix
 
@@ -139,6 +143,8 @@ CI is designed to cover:
 - WooCommerce product create/update/trash/force-delete.
 - product categories and brands.
 - variable-product variation CRUD and rollback scenarios.
+- fresh-state token rejection for stale update/delete requests.
+- ACF first-write identity and authoritative rollback behavior.
 - ACF and WooCommerce WordPress Abilities discovery/execution boundaries.
 - negative cases that must not partially persist changes.
 
@@ -173,7 +179,7 @@ For the site content repository the app needs Repository permissions → **Conte
 
 ## Release discipline
 
-`main` is protected by required CI checks. Tagged versions rerun the quality workflow, verify tag/source/readme version parity, build the ZIP twice and create a draft GitHub Release. Publishing remains a separate staging/browser gate.
+`main` is protected. Release acceptance requires the complete `Plugin quality` matrix to be green on the final PR head and again on the resulting `main` commit, even if repository branch-protection settings enforce only a subset of those jobs. Tagged versions rerun the quality workflow, verify tag/source/readme version parity, build the ZIP twice and create a draft GitHub Release. Publishing remains a separate staging/browser gate.
 
 ## About the developer
 
