@@ -479,12 +479,36 @@ try {
 		throw new RuntimeException( 'ProductVariation delete failed readback.' );
 	}
 
-	$catalog = $abilities->catalog();
+	$catalog   = $abilities->catalog();
 	$available = is_array( $catalog['abilities'] ?? null ) ? $catalog['abilities'] : [];
-	foreach ( [ 'core/get-site-info', 'acf/field-groups', 'acf/register-field-group', 'yoast-seo/get-seo-scores', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete', 'woocommerce/products-query' ] as $ability_name ) {
+	foreach ( [ 'core/get-site-info', 'acf/field-groups', 'acf/register-field-group', 'woocommerce/product-create', 'woocommerce/product-update', 'woocommerce/product-delete', 'woocommerce/products-query' ] as $ability_name ) {
 		if ( ! isset( $available[ $ability_name ] ) ) {
 			throw new RuntimeException( 'Expected runtime ability is missing: ' . $ability_name );
 		}
+	}
+
+	$registered_yoast = [];
+	foreach ( wp_get_abilities() as $ability_name => $ability ) {
+		$ability_name = is_string( $ability_name ) ? $ability_name : ( is_object( $ability ) && method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '' );
+		if ( ! str_starts_with( $ability_name, 'yoast-seo/' ) || ! is_object( $ability ) || ! method_exists( $ability, 'get_meta' ) ) {
+			continue;
+		}
+		$meta    = $ability->get_meta();
+		$exposed = is_array( $meta ) && ( true === ( $meta['public'] ?? false ) || true === ( $meta['show_in_rest'] ?? false ) || ( is_array( $meta['mcp'] ?? null ) && true === ( $meta['mcp']['public'] ?? false ) ) );
+		if ( $exposed ) {
+			$registered_yoast[] = $ability_name;
+		}
+	}
+	$catalogued_yoast = [];
+	foreach ( array_keys( $available ) as $ability_name ) {
+		if ( str_starts_with( $ability_name, 'yoast-seo/' ) ) {
+			$catalogued_yoast[] = $ability_name;
+		}
+	}
+	sort( $registered_yoast, SORT_STRING );
+	sort( $catalogued_yoast, SORT_STRING );
+	if ( $registered_yoast !== $catalogued_yoast ) {
+		throw new RuntimeException( 'The bridge Yoast ability catalog does not match the abilities registered by the live Yoast runtime.' );
 	}
 	$core_result = $abilities->execute(
 		[
