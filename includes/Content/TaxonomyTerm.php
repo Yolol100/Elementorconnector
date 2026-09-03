@@ -103,7 +103,7 @@ final class TaxonomyTerm {
 				if ( is_wp_error( $restored ) ) {
 					throw new RuntimeException( 'WordPress rejected taxonomy rollback.' );
 				}
-				$this->apply_acf( $term_id, $before['acf'] );
+				$this->apply_acf( $term_id, $taxonomy, $before['acf'] );
 				$this->apply_yoast( $term_id, $taxonomy, $before['yoast'] );
 				if ( ! hash_equals( CanonicalJson::hash( $before ), CanonicalJson::hash( $this->payload( $term_id, $taxonomy ) ) ) ) {
 					throw new RuntimeException( 'Taxonomy rollback failed exact readback verification.' );
@@ -182,7 +182,7 @@ final class TaxonomyTerm {
 			}
 		}
 		if ( array_key_exists( 'parent', $data ) ) {
-			if ( ! is_int( $data['parent'] ) || $data['parent'] < 0 ) {
+			if ( ! is_int( $data['parent'] ) || 0 > $data['parent'] ) {
 				throw new RuntimeException( 'The taxonomy term parent is invalid.' );
 			}
 			$args['parent'] = $data['parent'];
@@ -203,14 +203,14 @@ final class TaxonomyTerm {
 			'slug'        => (string) $term->slug,
 			'description' => (string) $term->description,
 			'parent'      => (int) $term->parent,
-			'acf'         => $this->acf( $term_id ),
+			'acf'         => $this->acf( $term_id, $taxonomy ),
 			'yoast'       => $this->yoast( $term, $taxonomy ),
 		];
 	}
 
 	private function validate_extensions( int $term_id, string $taxonomy, array $data ): void {
 		if ( array_key_exists( 'acf', $data ) ) {
-			$this->validate_acf( $term_id, $data['acf'] );
+			$this->validate_acf( $term_id, $taxonomy, $data['acf'] );
 		}
 		if ( array_key_exists( 'yoast', $data ) ) {
 			$this->validate_yoast( $term_id, $taxonomy, $data['yoast'] );
@@ -219,7 +219,7 @@ final class TaxonomyTerm {
 
 	private function apply_extensions( int $term_id, string $taxonomy, array $data ): void {
 		if ( array_key_exists( 'acf', $data ) ) {
-			$this->apply_acf( $term_id, $data['acf'] );
+			$this->apply_acf( $term_id, $taxonomy, $data['acf'] );
 		}
 		if ( array_key_exists( 'yoast', $data ) ) {
 			$this->apply_yoast( $term_id, $taxonomy, $data['yoast'] );
@@ -248,50 +248,26 @@ final class TaxonomyTerm {
 		}
 	}
 
-	private function acf( int $term_id ): array {
-		if ( ! function_exists( 'get_field_objects' ) ) {
-			return [];
-		}
-		$objects = get_field_objects( 'term_' . $term_id, false, true, false );
-		if ( ! is_array( $objects ) ) {
-			return [];
-		}
-		$result = [];
-		foreach ( $objects as $name => $field ) {
-			if ( ! is_array( $field ) || empty( $field['key'] ) || empty( $field['name'] ) ) {
-				continue;
-			}
-			$result[ (string) $name ] = [ 'key' => (string) $field['key'], 'type' => (string) ( $field['type'] ?? '' ), 'value' => $field['value'] ?? null ];
-		}
-		ksort( $result, SORT_STRING );
-		return $result;
+	private function acf( int $term_id, string $taxonomy ): array {
+		return AcfFieldCatalog::for_term( $term_id, $taxonomy );
 	}
 
-	private function validate_acf( int $term_id, mixed $acf ): void {
+	private function validate_acf( int $term_id, string $taxonomy, mixed $acf ): void {
 		if ( ! is_array( $acf ) || ( [] !== $acf && array_is_list( $acf ) ) ) {
 			throw new RuntimeException( 'Taxonomy ACF data must be an object.' );
 		}
 		if ( [] === $acf ) {
 			return;
 		}
-		if ( ! function_exists( 'get_field_objects' ) || ! function_exists( 'update_field' ) ) {
+		if ( ! AcfFieldCatalog::available() ) {
 			throw new RuntimeException( 'ACF taxonomy data is present but Advanced Custom Fields is not active.' );
 		}
-		$current = $this->acf( $term_id );
-		foreach ( $acf as $name => $field ) {
-			$keys = is_array( $field ) ? array_keys( $field ) : [];
-			sort( $keys, SORT_STRING );
-			if ( ! isset( $current[ $name ] ) || [ 'key', 'type', 'value' ] !== $keys || $field['key'] !== $current[ $name ]['key'] || $field['type'] !== $current[ $name ]['type'] ) {
-				throw new RuntimeException( 'The ACF taxonomy field identity no longer matches the site.' );
-			}
-		}
+		AcfFieldCatalog::validate( $acf, $this->acf( $term_id, $taxonomy ), 'The ACF taxonomy field identity no longer matches the site.' );
 	}
 
-	private function apply_acf( int $term_id, mixed $acf ): void {
-		$this->validate_acf( $term_id, $acf );
-		foreach ( $acf as $field ) {
-			update_field( (string) $field['key'], $field['value'], 'term_' . $term_id );
-		}
+	private function apply_acf( int $term_id, string $taxonomy, mixed $acf ): void {
+		$this->validate_acf( $term_id, $taxonomy, $acf );
+		AcfFieldCatalog::apply( $acf, 'term_' . $term_id );
 	}
 
 	private function yoast( \WP_Term $term, string $taxonomy ): array {
