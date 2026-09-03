@@ -21,6 +21,19 @@ jobs:
       - name: Apply exact product-brand repair
         run: python3 .github/repair_product_brand_alignment.py
 
+      - name: Correct literal regression assertion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/content-request-safety.php')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'str_contains($products, "$content[\'taxonomies\'][\'product_brand\'] = $slugs")',
+              'str_contains($products, "\\$content[\'taxonomies\'][\'product_brand\'] = \\$slugs")',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: PHP syntax
         run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 
