@@ -1,191 +1,46 @@
-# Elementor JSON Bridge — Controlled WordPress Content Automation
+# Elementor JSON Bridge — migration source
 
-> **Portfolio flagship · WordPress/PHP · Elementor · ACF · Yoast SEO · WooCommerce · GitHub Actions**
+> **Platformstatus:** migratiebron · legacy live WordPress/Elementor bridge · geen nieuwe features
 
-Elementor JSON Bridge is a WordPress plugin that lets reviewed changes move between GitHub and WordPress without bypassing WordPress, Elementor or WooCommerce APIs. It is designed for teams that want automation without turning content updates into uncontrolled direct database writes.
+Deze repository blijft uitsluitend beschikbaar als consolidatiebron tijdens de overgang naar `Yolol100/wordpressconnector`. Nieuwe Webactueel-functionaliteit hoort niet meer in `Elementorconnector`.
 
-**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)  
-**Status:** active development · staging-first for production rollout
+## Canonieke route
 
-## What problem it solves
+De actuele platformroute is:
 
-WordPress automation becomes risky when external tools write directly to post meta, Elementor data or WooCommerce records. This project keeps WordPress as the execution boundary: tools can prepare reviewed JSON in GitHub, while WordPress rechecks permissions, validates the payload, writes through supported APIs and verifies the resulting state.
+`webactueel-workflow -> wordpressqualityarchitect/elementor -> Yolol100/wordpressconnector`
 
-## Technical snapshot
+`wordpressconnector` is de canonieke live WordPress-bridge. `Elementorconnector` mag pas worden gearchiveerd wanneer de nog benodigde staging read/write/delete-, state-, capability- en rollbackpariteit aantoonbaar is overgenomen en teruggelezen.
 
-| Area | Evidence |
-| --- | --- |
-| WordPress | Pages, posts, custom post types and taxonomy terms |
-| Elementor | Existing documents plus explicitly requested new documents through Elementor APIs |
-| ACF | Field values tied to live field identity and supported abilities |
-| Yoast SEO | Conservative user-editable SEO metadata and live registered abilities |
-| WooCommerce | Products, variations, categories, tags and brands through WooCommerce CRUD |
-| Safety | Validation, site-scoped fresh-state tokens, idempotency, compare-and-swap locking, integrity snapshots, readback and verified rollback |
-| Delivery | Composer, wp-env, GitHub Actions, integration matrices and deterministic release builds |
+## Wat deze repository historisch levert
 
-Version **0.6.0** expands the bridge with guarded CRUD request flows for WordPress content, Elementor documents, WooCommerce catalog data, taxonomy terms and product variations, plus a live WordPress Abilities catalog for ACF, Yoast SEO, WooCommerce and safe Core discovery.
+De bridge bevat gecontroleerde WordPress/PHP-integratielogica voor onder meer:
 
-## What it manages
+- WordPress posts, pages en taxonomieën;
+- Elementor-documenten via Elementor APIs;
+- ACF-velden gekoppeld aan live field identity;
+- Yoast SEO-metadata en beschikbare abilities;
+- WooCommerce-producten, variaties en taxonomieën via WooCommerce CRUD;
+- state tokens, idempotency, conflictchecks, snapshots, readback en rollback;
+- GitHub-gebaseerde gecontroleerde requestflows en CI.
 
-- WordPress Pages, Posts and other website-facing editable post types.
-- Existing Elementor documents and explicitly requested new Elementor documents through Elementor's document manager.
-- ACF values bound to live field identity; ACF schema abilities when ACF AI access is enabled on the site.
-- A conservative set of user-editable Yoast SEO metadata; live Yoast abilities when actually registered.
-- WooCommerce products through WooCommerce CRUD, including simple, variable, grouped and external products.
-- WooCommerce product variations.
-- WordPress categories/tags and WooCommerce categories/tags/brands through taxonomy term operations.
-- Current WooCommerce stable catalog fields including global product identifiers, low-stock thresholds and product brands when the installed WooCommerce version supports them.
+Deze bestaande capability mag als migratiebewijs of rollbackreferentie worden gebruikt, maar is niet langer de standaard Webactueel-runtime.
 
-COGS is intentionally **not** exposed as an unconditional generic field. WooCommerce feature-gates that value; the bridge reports this as feature-gated context instead of pretending every site can safely mutate it.
+## Veiligheidsgrens
 
-## Repository protocol
+Repository-CI bewijst geen productiegeschiktheid. Live of stagingmutaties vereisen de actuele owner-, bron-, preflight-, toestemming-, readback- en rollbackgates uit de Webactueel-workflow. Productiecredentials, klantdata en runtime-state horen niet op `main`.
 
-Default root:
+## Ownership
 
-```text
-site-data/
-  bridge.json
-  site-index.json
-  abilities.json
-  elementor-capabilities.json
-  media.json
-  content/
-    pages/{id}.json
-    posts/{id}.json
-    templates/{id}.json
-    custom/{post-type}/{id}.json
-  requests/
-    {request-id}.json
-```
+- Procescontroller: `webactueel-workflow`
+- WordPress/code-owner: `wordpressqualityarchitect`
+- Elementor-owner voor builderstructuur: `elementor`
+- Canonieke live bridge: `Yolol100/wordpressconnector`
+- Status van deze repo: consolidatie/migratie-only
 
-`bridge.json` is the machine-readable protocol contract. `site-index.json` maps managed WordPress items to canonical content files. `abilities.json` records the abilities and integration versions actually available on the target. `elementor-capabilities.json` records the Elementor/Core/Pro/add-on surface actually registered on the site.
+## Archive gate
 
-WooCommerce catalog fields are intentionally request-driven: use `manage-product` / `manage-product-variation` so writes go through WooCommerce CRUD and exact readback instead of generic post-meta mutation.
-
-For an existing post, product, variation or taxonomy term, first use that request type's `read` action. The result contains a site-scoped `state_token`. Every later `update` or `delete` must send that exact value as `expected_state_token`. If the target changes after the read, the write is rejected before mutation and a fresh read/request is required.
-
-## Supported request formats
-
-### WordPress content
-
-`elementor-json-bridge/manage-post`, version `1`
-
-Actions: `create`, `read`, `update`, `delete`. New items are drafts. `read` returns the current payload plus `state_token`; update/delete require the matching `expected_state_token`. Delete additionally requires `confirm_destructive=true`.
-
-When a create request contains an `elementor` document payload, creation is routed through `Elementor\Plugin::$instance->documents->create()` and saved through the Elementor document API. A normal WordPress item is never silently converted into Elementor content.
-
-### WooCommerce products
-
-`elementor-json-bridge/manage-product`, version `1`
-
-Actions: `create`, `read`, `update`, `delete`. Reads return `state_token`; update/delete require the matching `expected_state_token`.
-
-Product updates use `WC_Product` setters and `save()`. Product deletion follows WooCommerce semantics:
-
-- `confirm_destructive=true`, no `force`: move to Trash when WooCommerce allows trashing.
-- `confirm_destructive=true` + `force=true`: permanent deletion.
-
-The bridge validates the full desired WooCommerce state before applying the request and performs exact readback. Failed updates attempt a verified rollback.
-
-### WooCommerce variations
-
-`elementor-json-bridge/manage-product-variation`, version `1`
-
-Create, read, update and permanent delete are supported against an exact variable-product parent. Reads return `state_token`; update/delete require the matching `expected_state_token`. Destructive deletion also requires confirmation. Variation writes use `WC_Product_Variation` and verified readback/rollback.
-
-### Taxonomy terms
-
-`elementor-json-bridge/manage-term`, version `1`
-
-Create, read, update and delete terms using WordPress taxonomy APIs. Reads return `state_token`; update/delete require the matching `expected_state_token`. Term ACF and Yoast data are supported where the relevant plugin APIs are active. A late extension failure cannot silently leave a partially renamed/updated term; authoritative ACF rollback also removes fields that were newly introduced by the failed request.
-
-### WordPress Abilities
-
-`elementor-json-bridge/run-ability`, version `1`
-
-The bridge does not hardcode a promise that every plugin ability exists. `abilities.json` is generated from the live target and currently considers these namespaces/capabilities:
-
-- safe Core discovery (`core/*`; Core execution through this GitHub route is read-only only),
-- `acf/*`,
-- `yoast-seo/*`,
-- WooCommerce product abilities (`woocommerce/product-*` and `woocommerce/products-*`).
-
-Each ability remains subject to its own WordPress permission callback and input/output schema. Abilities marked destructive require `confirm_destructive=true`.
-
-## Safety model
-
-1. Private GitHub repository required.
-2. Background actor must be the administrator who authorized the connection and still hold the bridge capability; repository-authored request execution follows the same `auto_apply` opt-in.
-3. Request payloads are bounded to 1 MB and use strict known-field validation.
-4. Request IDs are fingerprinted for idempotency; reusing an ID with changed input fails closed.
-5. Only one request-processing poll may execute at a time. Initial ownership uses an atomic option insert; stale takeover and release use compare-and-swap/conditional deletion so an older worker cannot delete a newer lock.
-6. Existing request targets use site-scoped state tokens. Update/delete must present the token from an immediately preceding read, and stale tokens fail before mutation.
-7. Existing canonical content uses fresh conflict checks, local integrity-checked snapshots, validation, supported APIs, full readback and verified rollback.
-8. Direct post updates create a durable pre-mutation snapshot, including integrity-checked extended state, before applying changes. Direct product, variation and term updates also prevalidate, read back and verify rollback on failure.
-9. ACF fields remain bound to live field identity; authoritative rollback removes new ACF values that were introduced by a failed request.
-10. Elementor data is written through Elementor document APIs, never by directly writing `_elementor_data`.
-11. WooCommerce product data is written through WooCommerce CRUD.
-12. Destructive product/term/variation/ability operations require explicit confirmation.
-
-## Runtime matrix
-
-CI is designed to cover:
-
-- PHP 8.1–8.5 syntax and compatibility.
-- WordPress Coding Standards.
-- dependency audit.
-- deterministic release ZIP build.
-- WordPress Plugin Check: general, security, performance and accessibility categories.
-- WordPress 6.8.3 / PHP 8.1 compatibility runtime with Elementor 4.2.4 + ACF 6.8.9.
-- WordPress 7.1 / PHP 8.3 current-integration runtime with Elementor 4.2.4 + ACF 6.8.9 + Yoast SEO 28.4 + WooCommerce 11.0.1.
-- ordinary WordPress/ACF/Yoast content roundtrips.
-- real Elementor document create/save/readback.
-- WooCommerce product create/update/trash/force-delete.
-- product categories and brands.
-- variable-product variation CRUD and rollback scenarios.
-- fresh-state token rejection for stale update/delete requests.
-- ACF first-write identity and authoritative rollback behavior.
-- ACF and WooCommerce WordPress Abilities discovery/execution boundaries.
-- negative cases that must not partially persist changes.
-
-## What CI does not prove
-
-Repository CI is not a production-site oracle. Before a production rollout, test the exact generated ZIP on the intended staging site, including:
-
-- the real private GitHub Device Flow connection and repository permissions;
-- the site's exact third-party plugin/add-on combination;
-- Elementor Pro Theme Builder conditions if used;
-- authenticated wp-admin/browser/accessibility behavior;
-- provider-specific mail/payment/checkout behavior if relevant to the site.
-
-## Local checks
-
-```bash
-find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
-node --check assets/js/admin.js
-node --check assets/js/local-export.js
-node --check assets/js/template-import.js
-composer validate --strict
-composer install --no-interaction --prefer-dist
-composer test
-composer phpcs
-composer audit
-bash scripts/build-zip.sh
-```
-
-## GitHub App permissions
-
-For the site content repository the app needs Repository permissions → **Contents: Read and write**. Do not grant Administration, Actions, Issues or unrelated permissions merely for content synchronization.
-
-## Release discipline
-
-`main` is protected. Release acceptance requires the complete `Plugin quality` matrix to be green on the final PR head and again on the resulting `main` commit, even if repository branch-protection settings enforce only a subset of those jobs. Tagged versions rerun the quality workflow, verify tag/source/readme version parity, build the ZIP twice and create a draft GitHub Release. Publishing remains a separate staging/browser gate.
-
-## About the developer
-
-I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across **90+ WordPress projects**. I currently manage and regularly update **120+ websites and webshops**, covering maintenance, UX, performance, technical SEO, QA and ongoing WordPress/WooCommerce improvements.
-
-[Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
+Archiveer deze repository pas nadat `wordpressconnector` aantoonbaar de benodigde functionele pariteit bezit voor de resterende migratiescope, inclusief gecontroleerde stagingmutaties en rollback/readback. Tot dat moment geldt: onderhoud alleen voor migratie, beveiliging of bewijsbehoud; geen nieuwe productfeatures.
 
 ## License
 
