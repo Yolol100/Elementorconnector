@@ -2,18 +2,25 @@
 
 Apply these rules to every change in this repository.
 
+## Platform status
+
+This repository is a maintenance-only consolidation source for the canonical `Yolol100/wordpressconnector` live WordPress bridge. Read `MIGRATION.md` before changing behavior. Existing validated routes may be maintained, but do not add a new Webactueel platform capability unless it preserves safety or closes a proven migration parity gap.
+
+## Rules
+
 1. Preserve the plugin slug `elementor-json-bridge`, namespace `Webactueel\ElementorJsonBridge`, option/meta keys and documented JSON contract unless a breaking migration is explicitly approved.
-2. Never commit credentials, GitHub tokens, client secrets, license keys, private URLs, database dumps, logs with secrets, or real-site Elementor JSON to a public repository or the source `main` branch. In explicitly configured single-repository mode, real-site JSON may exist only in the private `site-sync` branch under `site-data/`.
-3. Keep the plugin independent of OpenAI APIs and MCP. GitHub is the only external synchronization provider in v0.2.x.
-4. Do not write Elementor content directly to `_elementor_data`. Read/write through Elementor document APIs and verify readback.
-5. Preserve the safety sequence: fresh state -> conflict check -> snapshot -> validation -> save -> readback -> fingerprint -> verified, otherwise rollback.
-6. Automatic remote apply is opt-in and disabled by default. It must bind to the administrator who explicitly enables the setting, recheck that actor's bridge capability and `edit_post` permission for each target, temporarily activate that WordPress user context only for the guarded operation, and restore the previous user even after failures. Both manual and automatic apply paths must revalidate fresh GitHub/local state, refuse conflicts, create a snapshot, validate, save through Elementor, verify readback and roll back on failure.
-7. Treat GitHub data, repository files, branch names and API responses as untrusted input. Validate before use.
-8. Existing GitHub files with unknown base history must never be overwritten. Use the current GitHub blob SHA for updates and fail closed on mismatch.
+2. Never commit credentials, GitHub tokens, client secrets, license keys, private URLs, database dumps, logs with secrets, or real-site Elementor JSON to a public source branch. Real-site JSON may exist only in an explicitly configured private site-sync route.
+3. Keep the plugin independent of OpenAI APIs and MCP. GitHub remains the external synchronization provider for existing routes.
+4. Do not write Elementor content directly to `_elementor_data`. Use Elementor document APIs and verify readback.
+5. Preserve the safety sequence: fresh state → conflict check → snapshot → validation → save → readback → fingerprint → verified; otherwise rollback.
+6. Automatic remote apply remains opt-in and disabled by default. Recheck the authorized actor, bridge capability and per-target permission for every guarded operation, and always restore prior user context after failure or success.
+7. Treat GitHub data, repository files, branch names and API responses as untrusted input.
+8. Never overwrite a GitHub file with unknown base history. Bind updates to the current blob SHA and fail closed on mismatch.
 9. Keep tokens server-side and encrypted at rest. Never expose them to admin JavaScript, REST responses or logs.
-10. Keep outbound hosts fixed to documented GitHub HTTPS endpoints. Do not add generic URL fetchers or inbound public webhooks without a separate security design.
-11. Prefer the smallest implementation. No React, custom database table, background queue framework or new dependency unless a demonstrated requirement justifies it.
-12. Every behavioral/security change needs a regression test. Run PHP lint, `php tests/run.php`, `php tests/background-authorization.php`, PHPCS/PHPCompatibility where available, package validation and the relevant runtime/staging test before a release claim.
-13. CI actions must use minimum permissions. Pin third-party/official actions to full commit SHAs and update them deliberately.
-14. The release ZIP contains runtime files only. Tests, CI, Composer dev files, agent instructions, local artifacts and `site-data/` stay out of the package.
-15. Do not claim 10/10 or production-ready from static checks alone. Production behavior requires staging/target evidence and rollback proof.
+10. Keep outbound hosts fixed to documented GitHub HTTPS endpoints. Do not add generic URL fetchers, inbound public webhooks or proxy primitives.
+11. Prefer the smallest implementation. Add no framework, table, queue or dependency without a demonstrated requirement.
+12. Every behavioral or security change needs a regression test. Run PHP lint, existing test suites, PHPCS/PHPCompatibility where available, package validation and the relevant runtime/staging test.
+13. Use minimum GitHub Actions permissions and pin external actions to full commit SHAs.
+14. Keep tests, CI, development files, agent instructions, local artifacts and `site-data/` out of the release ZIP.
+15. Do not claim production-ready or 10/10 from static checks alone. Require staging/target evidence and rollback proof.
+16. During consolidation, allow only security/compatibility fixes, parity tests, documentation and minimal extraction work. Do not broaden capabilities or remove this route until every exit gate in `MIGRATION.md` is proven.
