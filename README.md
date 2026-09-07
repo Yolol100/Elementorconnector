@@ -1,46 +1,32 @@
-# Elementor JSON Bridge — migration source
+# Elementor JSON Bridge — legacy migration source
 
-> **Platformstatus:** migratiebron · legacy live WordPress/Elementor bridge · geen nieuwe features
+> **Platformstatus:** code-frozen migration source · geen nieuwe productfeatures.
 
-Deze repository blijft uitsluitend beschikbaar als consolidatiebron tijdens de overgang naar `Yolol100/wordpressconnector`. Nieuwe Webactueel-functionaliteit hoort niet meer in `Elementorconnector`.
+De canonieke live bridge is `Yolol100/wordpressconnector` 1.9.0+. Deze repository blijft alleen tijdelijk beschikbaar als historische rollback-/migratiereferentie totdat de nieuwe connector op de relevante WordPress-sites runtime-pariteit heeft bewezen.
 
 ## Canonieke route
 
-De actuele platformroute is:
+`ChatGPT / WP Agent -> WordPress Connector REST -> WordPress / Elementor -> readback + rollback`
 
-`webactueel-workflow -> wordpressqualityarchitect/elementor -> Yolol100/wordpressconnector`
+GitHub request/result transport uit deze legacy bridge is niet meer de standaard route en wordt niet gemigreerd als tweede transportlaag.
 
-`wordpressconnector` is de canonieke live WordPress-bridge. `Elementorconnector` mag pas worden gearchiveerd wanneer de nog benodigde staging read/write/delete-, state-, capability- en rollbackpariteit aantoonbaar is overgenomen en teruggelezen.
+## Overgenomen in WordPress Connector
 
-## Wat deze repository historisch levert
+- WordPress content en taxonomieën;
+- Elementor document inspect/create/replace/patch via Elementor APIs;
+- Elementor Core/Pro/add-on capability inventory en forms;
+- ACF, WooCommerce, Yoast en media;
+- idempotency, mutation lock, stale-state bescherming, readback en rollback;
+- Elementor JSON Page/Post/Saved Template import en export;
+- create-new en replace-existing JSON import;
+- Page/Post export met optionele Theme Builder header/footer bundle;
+- site-scoped HMAC `expected_state_token` naast `expected_fingerprint`.
 
-De bridge bevat gecontroleerde WordPress/PHP-integratielogica voor onder meer:
+## Verwijdering
 
-- WordPress posts, pages en taxonomieën;
-- Elementor-documenten via Elementor APIs;
-- ACF-velden gekoppeld aan live field identity;
-- Yoast SEO-metadata en beschikbare abilities;
-- WooCommerce-producten, variaties en taxonomieën via WooCommerce CRUD;
-- state tokens, idempotency, conflictchecks, snapshots, readback en rollback;
-- GitHub-gebaseerde gecontroleerde requestflows en CI.
+Verwijder of archiveer deze repository pas nadat WordPress Connector 1.9.0+ op alle relevante sites staat en stagingtests voor Elementor create/replace/readback, rollback, JSON import/export en Theme Builder site-parts zijn geslaagd. Controleer ook dat de oude Elementor JSON Bridge nergens meer actief is.
 
-Deze bestaande capability mag als migratiebewijs of rollbackreferentie worden gebruikt, maar is niet langer de standaard Webactueel-runtime.
-
-## Veiligheidsgrens
-
-Repository-CI bewijst geen productiegeschiktheid. Live of stagingmutaties vereisen de actuele owner-, bron-, preflight-, toestemming-, readback- en rollbackgates uit de Webactueel-workflow. Productiecredentials, klantdata en runtime-state horen niet op `main`.
-
-## Ownership
-
-- Procescontroller: `webactueel-workflow`
-- WordPress/code-owner: `wordpressqualityarchitect`
-- Elementor-owner voor builderstructuur: `elementor`
-- Canonieke live bridge: `Yolol100/wordpressconnector`
-- Status van deze repo: consolidatie/migratie-only
-
-## Archive gate
-
-Archiveer deze repository pas nadat `wordpressconnector` aantoonbaar de benodigde functionele pariteit bezit voor de resterende migratiescope, inclusief gecontroleerde stagingmutaties en rollback/readback. Tot dat moment geldt: onderhoud alleen voor migratie, beveiliging of bewijsbehoud; geen nieuwe productfeatures.
+Tot dat moment: alleen beveiligings-/migratieonderhoud; geen nieuwe features.
 
 ## License
 
