@@ -1,64 +1,42 @@
-# Platform migration status
+# Elementorconnector -> WordPress Connector
 
 ## Status
 
-`Yolol100/Elementorconnector` is a controlled consolidation source. It remains operational for existing validated routes, but receives no new Webactueel platform capability unless that capability is required to preserve safety or close a proven parity gap.
+Source consolidation is complete in `Yolol100/wordpressconnector` 1.9.0. This repository is legacy-only and code-frozen except for security/migration maintenance.
 
-The target platform route is:
+## Successor
 
-```text
-webactueel-workflow
-→ originating domain owner
-→ wordpressqualityarchitect safety/runtime ownership
-→ Yolol100/wordpressconnector
-→ exact readback and rollback evidence
-```
+Canonical route:
 
-## Why consolidation
+`ChatGPT / WP Agent -> authenticated HTTPS REST -> WordPress Connector -> WordPress/Elementor -> exact readback + rollback`
 
-`wordpressconnector` already provides the broader canonical live WordPress bridge for WordPress content, Elementor, ACF, WooCommerce, media, users, settings and system actions behind explicit gates. Maintaining two primary live bridges creates duplicate permissions, request protocols, state models, tests and rollback paths.
+WordPress Connector now owns the live WordPress/Elementor bridge. `Yolol100/elementorjson` remains separate as the controlled Elementor JSON QA/runtime lab.
 
-## What must be migrated
+## Parity implemented in 1.9.0
 
-The following Elementorconnector strengths must be retained before this repository can be deprecated:
+- Elementor document inspect/create/replace/patch through Elementor APIs;
+- capability inventory and Elementor V3/V4 forms;
+- ACF, WooCommerce, Yoast and media adapters;
+- mutation lock, idempotency and rollback snapshots;
+- deterministic `expected_fingerprint` plus site-scoped HMAC `expected_state_token`;
+- Page/Post Elementor JSON export;
+- Saved Template native export fallback;
+- Page/Post/Saved Template import with explicit replace-existing or create-new-draft behavior;
+- optional Page/Post bundle with matching Elementor Pro Theme Builder header/footer.
 
-- live Elementor/Core/Pro/add-on capability inventory;
-- WordPress Abilities discovery and schema/permission checks;
-- site-scoped fresh-state tokens;
-- idempotency and compare-and-swap stale-state guards;
-- Elementor document API create/save/readback;
-- WooCommerce CRUD and ACF identity boundaries;
-- exact post-mutation readback and verified rollback;
-- same-site media identity;
-- negative permission, conflict and partial-persistence tests.
+## Runtime exit gate
 
-## Change policy during migration
+Before removing this repository/plugin, verify on staging:
 
-Allowed:
+1. `connector.discover`, `system.doctor` and `elementor.capabilities` pass;
+2. Elementor inspect/create/replace returns exact readback;
+3. stale fingerprint/token requests are rejected before write;
+4. repeated request IDs remain idempotent;
+5. rollback succeeds after a representative mutation/failure path;
+6. Page/Post JSON create + replace succeeds;
+7. Saved Template import/export succeeds;
+8. Theme Builder site-parts export succeeds where Elementor Pro is used;
+9. representative ACF/WooCommerce/Yoast/media operations needed by the workflow pass;
+10. no active site still runs Elementor JSON Bridge.
 
-- security fixes;
-- compatibility fixes for existing supported routes;
-- tests and documentation needed to prove parity;
-- minimal changes needed for safe extraction into `wordpressconnector`.
-
-Not allowed:
-
-- new unrelated platform features;
-- broader GitHub or WordPress permissions;
-- a second orchestration layer;
-- direct database, `_elementor_data`, arbitrary SQL, shell, filesystem or proxy primitives;
-- removal before staging parity and rollback proof.
-
-## Exit gates
-
-Archive/deprecate this repository only after:
-
-1. capability-diff is complete;
-2. missing capabilities are implemented in `wordpressconnector`;
-3. local/CI, disposable-runtime and staging matrices pass;
-4. read/write/delete/stale-state/permission/rollback cases have equivalent evidence;
-5. active site routes use `wordpressconnector`;
-6. one stable regression period has passed;
-7. rollback documentation remains available.
-
-Until then, existing validated usage may continue. A missing gate means `NO_CHANGE`, not forced migration.
+If any gate is missing, keep this repository as rollback/migration evidence. Do not add new product capability here.
