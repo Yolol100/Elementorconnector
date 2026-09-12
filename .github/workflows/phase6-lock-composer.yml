@@ -27,7 +27,7 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      - name: Generate and verify deterministic Composer tool lock
+      - name: Generate and commit deterministic Composer tool lock
         shell: bash
         run: |
           set -euo pipefail
@@ -40,16 +40,8 @@ jobs:
           composer validate --strict
           composer audit
           cmp /tmp/composer.first.lock composer.lock
-          python3 - <<'PY'
-          from pathlib import Path
-          path=Path('.github/workflows/ci.yml')
-          text=path.read_text(encoding='utf-8')
-          text=text.replace('composer validate --strict --no-check-lock', 'composer validate --strict')
-          path.write_text(text, encoding='utf-8')
-          PY
-          git rm .github/workflows/phase6-lock-composer.yml
           git config user.name 'webactueel-phase6'
           git config user.email 'actions@users.noreply.github.com'
-          git add composer.lock .github/workflows/ci.yml
+          git add composer.lock
           git commit -m 'Lock Composer development toolchain'
           git push origin HEAD
