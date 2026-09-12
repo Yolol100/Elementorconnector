@@ -1,0 +1,55 @@
+name: Phase 6 one-shot Composer lock
+
+on:
+  push:
+    branches:
+      - chore/phase6-composer-lock-20260912
+    paths:
+      - .github/workflows/phase6-lock-composer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Generate and verify deterministic Composer tool lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --strict --no-check-lock
+          composer update --no-interaction --prefer-dist --no-progress
+          test -s composer.lock
+          cp composer.lock /tmp/composer.first.lock
+          rm -rf vendor
+          composer install --no-interaction --prefer-dist --no-progress
+          composer validate --strict
+          composer audit
+          cmp /tmp/composer.first.lock composer.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('.github/workflows/ci.yml')
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('composer validate --strict --no-check-lock', 'composer validate --strict')
+          path.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/phase6-lock-composer.yml
+          git config user.name 'webactueel-phase6'
+          git config user.email 'actions@users.noreply.github.com'
+          git add composer.lock .github/workflows/ci.yml
+          git commit -m 'Lock Composer development toolchain'
+          git push origin HEAD
