@@ -4,6 +4,18 @@
 
 De canonieke live bridge is `Yolol100/wordpressconnector` 1.9.0+. Deze repository blijft alleen tijdelijk beschikbaar als historische rollback-/migratiereferentie totdat de nieuwe connector op de relevante WordPress-sites runtime-pariteit heeft bewezen.
 
+**Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio cases](https://andrewbaeten.nl/category/cases)
+
+## What it demonstrates
+
+| Area | Implementation |
+| --- | --- |
+| Migration engineering | Explicit handoff from a legacy bridge to the canonical WordPress Connector |
+| Elementor safety | Existing-document inspection, replace/patch flows and readback boundaries |
+| Recovery | Rollback/migration reference retained until parity is proven |
+| Integration scope | Elementor, ACF, WooCommerce, Yoast and media workflows |
+| Lifecycle discipline | Code frozen for new product features and kept only for migration/security maintenance |
+
 ## Canonieke route
 
 `ChatGPT / WP Agent -> WordPress Connector REST -> WordPress / Elementor -> readback + rollback`
